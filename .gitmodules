@@ -1,0 +1,3 @@
+[submodule "RestLib"]
+	path = RestLib
+	url = git@github.com:CyclotronResearchCentre/RestLib.git
