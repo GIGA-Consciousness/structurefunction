@@ -6,50 +6,49 @@ import nipype.interfaces.fsl as fsl
 import nipype.interfaces.freesurfer as fs
 import nipype.algorithms.misc as misc
 import nipype.pipeline.engine as pe
+from ..interfaces import SingleSubjectICA, MatchingClassification, ComputeFingerprint, CreateDenoisedImage
 from nipype.interfaces.utility import Function
 from nipype.workflows.dmri.connectivity.group_connectivity import (pullnodeIDs, concatcsv)
 
-import coma
-
 
 def pull_template_name(in_files):
-	from nipype.utils.filemanip import split_filename
-	out_files = []
-	graph_list = ['Auditory', 'Cerebellum', 'DMN', 'ECN_L', 'ECN_R',  'Salience', 'Sensorimotor', 'Visual_lateral', 'Visual_medial', 'Visual_occipital']
-	for in_file in in_files:
-		found = False
-		path, name, ext = split_filename(in_file)
-		for graph_name in graph_list:
-			if name.rfind(graph_name) > 0:
-				out_files.append(graph_name)
-				found = True
-		if not found:
-			out_files.append(name)
-	assert len(in_files) == len(out_files)
-	return out_files
-	
-	
+    from nipype.utils.filemanip import split_filename
+    out_files = []
+    graph_list = ['Auditory', 'Cerebellum', 'DMN', 'ECN_L', 'ECN_R',  'Salience', 'Sensorimotor', 'Visual_lateral', 'Visual_medial', 'Visual_occipital']
+    for in_file in in_files:
+        found = False
+        path, name, ext = split_filename(in_file)
+        for graph_name in graph_list:
+            if name.rfind(graph_name) > 0:
+                out_files.append(graph_name)
+                found = True
+        if not found:
+            out_files.append(name)
+    assert len(in_files) == len(out_files)
+    return out_files
+
+
 
 def get_component_index_resampled(out):
-	if isinstance(out, str):
-		idx = int(out.split('_')[-2])
-	elif isinstance(out, list):
-		idx = []
-		for value in out:
-			idx_value = int(value.split('_')[-2])
-			idx.append(idx_value)
-	return idx
-    
+    if isinstance(out, str):
+        idx = int(out.split('_')[-2])
+    elif isinstance(out, list):
+        idx = []
+        for value in out:
+            idx_value = int(value.split('_')[-2])
+            idx.append(idx_value)
+    return idx
+
 
 def get_component_index(out):
-	if isinstance(out, str):
-		idx = int(out.split('_')[-1].split('.')[0])
-	elif isinstance(out, list):
-		idx = []
-		for value in out:
-			idx_value = int(value.split('_')[-1].split('.')[0])
-			idx.append(idx_value)
-	return idx
+    if isinstance(out, str):
+        idx = int(out.split('_')[-1].split('.')[0])
+    elif isinstance(out, list):
+        idx = []
+        for value in out:
+            idx_value = int(value.split('_')[-1].split('.')[0])
+            idx.append(idx_value)
+    return idx
 
 
 def nxstats_and_merge_csvs(network_file, extra_field):
@@ -64,17 +63,17 @@ def nxstats_and_merge_csvs(network_file, extra_field):
 
 
 def remove_unconnected_graphs(in_files):
-	import networkx as nx
-	out_files = []
-	if in_files == None:
-		return None
-	elif len(in_files) == 0:
-		return None
-	for in_file in in_files:
-		graph = nx.read_gpickle(in_file)
-		if not graph.number_of_edges() == 0:
-			out_files.append(in_file)
-	return out_files
+    import networkx as nx
+    out_files = []
+    if in_files == None:
+        return None
+    elif len(in_files) == 0:
+        return None
+    for in_file in in_files:
+        graph = nx.read_gpickle(in_file)
+        if not graph.number_of_edges() == 0:
+            out_files.append(in_file)
+    return out_files
 
 def remove_unconnected_graphs_and_threshold(in_file):
     import nipype.interfaces.cmtk as cmtk
@@ -91,10 +90,10 @@ def remove_unconnected_graphs_and_threshold(in_file):
     if not graph.number_of_edges() == 0:
         connected.append(in_file)
         _, name, ext = split_filename(in_file)
-        filtered_network_file = op.abspath(name + '_filt' + ext)    
+        filtered_network_file = op.abspath(name + '_filt' + ext)
     if connected == []:
         return None
-            
+
     #threshold_graphs = pe.Node(interface=cmtk.ThresholdGraph(), name="threshold_graphs")
     threshold_graphs = cmtk.ThresholdGraph()
     from nipype.interfaces.cmtk.functional import tinv
@@ -139,9 +138,10 @@ def remove_unconnected_graphs_avg_and_cff(in_files, resolution_network_file, gro
     average_networks.run()
 
     _, name, ext = split_filename(avg_out_name)
-    filtered_network_file = op.abspath(name + '_filt' + ext)    
+    filtered_network_file = op.abspath(name + '_filt' + ext)
 
     threshold_graphs = cmtk.ThresholdGraph()
+    from nipype.interfaces.cmtk.functional import tinv
     weight_threshold = 1 #tinv(0.95, 198-30-1)
     threshold_graphs.inputs.network_file = avg_out_name
     threshold_graphs.inputs.weight_threshold = weight_threshold
@@ -161,58 +161,59 @@ def remove_unconnected_graphs_avg_and_cff(in_files, resolution_network_file, gro
     average_cff.run()
 
     out_files.append(op.abspath(avg_out_cff_name))
-    
+
     return out_files
 
 
 def group_fmri_graphs(subject_id, in_file, component_index, matching_stats):
-	def flatten_arrays(array_of_arrays):
-		list_of_lists = array_of_arrays.tolist()
-		result = [];
-		map(result.extend, list_of_lists)
-		return result
-	import scipy.io as sio
-	import shutil
-	from nipype.utils.filemanip import split_filename
-	import os, os.path as op
-	stats = sio.loadmat(matching_stats)
-	templates = flatten_arrays(stats['templates'])
-	template_names = flatten_arrays(stats['namesTemplate'][0])
-	components = flatten_arrays(stats['components'])
-	gofs = flatten_arrays(stats['gofs'])
-	neuronal_bool = flatten_arrays(stats['neuronal_bool'])
-	neuronal_prob = flatten_arrays(stats['neuronal_prob'])
-	path, name, ext = split_filename(in_file)
-	out_file = in_file
-	try:
-		IC_idx = components.index(int(component_index))
-		if int(neuronal_bool[IC_idx]) == 1:
-			template_name = str(template_names[templates[IC_idx]-1]) # Subtract one because template index comes from MATLAB
-			new_name = str(subject_id) + '_' + template_name + '_IC' + str(component_index)
-			out_file = op.abspath(new_name + ext)
-			shutil.copyfile(in_file, out_file)
-			print 'Component {ic} is neuronal with probability {p}. Assigning to template {t}'.format(ic=component_index, p=neuronal_prob[IC_idx], t=template_name)
-			return out_file
-	except ValueError:
-		return None
+    def flatten_arrays(array_of_arrays):
+        list_of_lists = array_of_arrays.tolist()
+        result = [];
+        map(result.extend, list_of_lists)
+        return result
+    import scipy.io as sio
+    import shutil
+    from nipype.utils.filemanip import split_filename
+    import os, os.path as op
+    stats = sio.loadmat(matching_stats)
+    templates = flatten_arrays(stats['templates'])
+    template_names = flatten_arrays(stats['namesTemplate'][0])
+    components = flatten_arrays(stats['components'])
+    gofs = flatten_arrays(stats['gofs'])
+    neuronal_bool = flatten_arrays(stats['neuronal_bool'])
+    neuronal_prob = flatten_arrays(stats['neuronal_prob'])
+    path, name, ext = split_filename(in_file)
+    out_file = in_file
+    try:
+        IC_idx = components.index(int(component_index))
+        if int(neuronal_bool[IC_idx]) == 1:
+            template_name = str(template_names[templates[IC_idx]-1]) # Subtract one because template index comes from MATLAB
+            new_name = str(subject_id) + '_' + template_name + '_IC' + str(component_index)
+            out_file = op.abspath(new_name + ext)
+            shutil.copyfile(in_file, out_file)
+            print 'Component {ic} is neuronal with probability {p}. Assigning to template {t}'.format(ic=component_index, p=neuronal_prob[IC_idx], t=template_name)
+            return out_file
+    except ValueError:
+        return None
 
 
 def removeNoneValues(in_files):
-	out_files = []
-	for value in in_files:
-		if not value is None:
-			out_files.append(value)
-	return out_files
+    out_files = []
+    for value in in_files:
+        if not value is None:
+            out_files.append(value)
+    return out_files
 
 
 def create_fmri_graphs(name="functional", with_simple_timecourse_correlation=False):
-    try: 
+    try:
         coma_rest_lib_path = os.environ['COMA_REST_LIB_ROOT']
     except KeyError:
         print 'COMA_REST_LIB_ROOT environment variable not set.'
 
-    inputnode_within = pe.Node(interface=util.IdentityInterface(fields=["subject_id", "functional_images", "fmri_ICA_maps", "ica_mask_image", "fmri_ICA_timecourse", "segmentation_file", "repetition_time", "resolution_network_file"]), name="inputnode_within")
+    inputnode_within = pe.Node(interface=util.IdentityInterface(fields=["subject_id", "functional_images", "segmentation_file", "repetition_time", "resolution_network_file"]), name="inputnode_within")
 
+    ica = pe.Node(interface=SingleSubjectICA(), name='ica')
     # Create the resampling nodes. Functional images and ICA maps must have the same dimensions as the segmentation file
     resampleFunctional = pe.MapNode(interface=fs.MRIConvert(), name='resampleFunctional', iterfield=['in_file'])
     resampleFunctional.inputs.out_type = 'nii'
@@ -225,11 +226,11 @@ def create_fmri_graphs(name="functional", with_simple_timecourse_correlation=Fal
         resample_non_neuronal.inputs.out_type = 'nii'
 
     # Create the ComaRestLib nodes
-    denoised_image = pe.Node(interface=coma.CreateDenoisedImage(), name='denoised_image')
+    denoised_image = pe.Node(interface=CreateDenoisedImage(), name='denoised_image')
     denoised_image.inputs.coma_rest_lib_path = coma_rest_lib_path
-    matching_classification = pe.Node(interface=coma.MatchingClassification(), name='matching_classification')
+    matching_classification = pe.Node(interface=MatchingClassification(), name='matching_classification')
     matching_classification.inputs.coma_rest_lib_path = coma_rest_lib_path
-    compute_fingerprints = pe.MapNode(interface=coma.ComputeFingerprint(), name='compute_fingerprints', iterfield=['in_file', 'component_index'])
+    compute_fingerprints = pe.MapNode(interface=ComputeFingerprint(), name='compute_fingerprints', iterfield=['in_file', 'component_index'])
     compute_fingerprints.inputs.coma_rest_lib_path = coma_rest_lib_path
 
     # Create the functional connectivity thresholding and mapping nodes
@@ -237,7 +238,6 @@ def create_fmri_graphs(name="functional", with_simple_timecourse_correlation=Fal
     connectivity_threshold = pe.Node(interface=cmtk.CreateConnectivityThreshold(), name='connectivity_threshold')
     connectivity_graph = pe.MapNode(interface=cmtk.ConnectivityGraph(), name='connectivity_graph', iterfield=['in_file', 'component_index'])
     neuronal_regional_timecourses = pe.Node(interface=cmtk.RegionalValues(), name="neuronal_regional_timecourses")
-    simple_regional_timecourses = pe.Node(interface=cmtk.RegionalValues(), name="simple_regional_timecourses")
 
     # Define the CFF Converter, NetworkX MATLAB -> CommaSeparatedValue nodes
     graphCFFConverter = pe.Node(interface=cmtk.CFFConverter(), name="graphCFFConverter")
@@ -313,34 +313,41 @@ def create_fmri_graphs(name="functional", with_simple_timecourse_correlation=Fal
     ### Create the workflow ###
     func_ntwk = pe.Workflow(name='func_ntwk')
 
+
+    func_ntwk.connect([(inputnode_within, ica,[('functional_images', 'in_files')])])
+    func_ntwk.connect([(inputnode_within, ica,[('subject_id', 'prefix')])])
+
     # Create the denoised image
-    func_ntwk.connect([(inputnode_within, denoised_image,[('fmri_ICA_maps', 'in_files')])])
-    func_ntwk.connect([(inputnode_within, denoised_image,[('repetition_time', 'repetition_time')])])	
-    func_ntwk.connect([(inputnode_within, denoised_image,[('ica_mask_image', 'ica_mask_image')])])
-    func_ntwk.connect([(inputnode_within, denoised_image,[('fmri_ICA_timecourse', 'time_course_image')])])
+    func_ntwk.connect([(inputnode_within, denoised_image,[('subject_id', 'prefix')])])
+    func_ntwk.connect([(inputnode_within, denoised_image,[('repetition_time', 'repetition_time')])])
+    func_ntwk.connect([(ica, denoised_image,[('independent_component_images', 'in_files')])])
+    func_ntwk.connect([(ica, denoised_image,[('mask_image', 'ica_mask_image')])])
+    func_ntwk.connect([(ica, denoised_image,[('independent_component_timecourse', 'time_course_image')])])
 
     # Runs the matching classification
-    func_ntwk.connect([(inputnode_within, matching_classification,[('fmri_ICA_maps', 'in_files')])])
+    func_ntwk.connect([(inputnode_within, matching_classification,[('subject_id', 'prefix')])])
     func_ntwk.connect([(inputnode_within, matching_classification,[('repetition_time', 'repetition_time')])])
-    func_ntwk.connect([(inputnode_within, matching_classification,[('ica_mask_image', 'ica_mask_image')])])
-    func_ntwk.connect([(inputnode_within, matching_classification,[('fmri_ICA_timecourse', 'time_course_image')])])
+    func_ntwk.connect([(ica, matching_classification,[('independent_component_images', 'in_files')])])
+    func_ntwk.connect([(ica, matching_classification,[('mask_image', 'ica_mask_image')])])
+    func_ntwk.connect([(ica, matching_classification,[('independent_component_timecourse', 'time_course_image')])])
 
     # Computes and saves the fingerprint for each IC
-    func_ntwk.connect([(inputnode_within, compute_fingerprints,[('fmri_ICA_maps', 'in_file')])])
+
     func_ntwk.connect([(inputnode_within, compute_fingerprints,[('repetition_time', 'repetition_time')])])
-    func_ntwk.connect([(inputnode_within, compute_fingerprints,[('ica_mask_image', 'ica_mask_image')])])
-    func_ntwk.connect([(inputnode_within, compute_fingerprints,[('fmri_ICA_timecourse', 'time_course_image')])])
-    func_ntwk.connect([(inputnode_within, compute_fingerprints,[(('fmri_ICA_maps', get_component_index), 'component_index')])])
+    func_ntwk.connect([(ica, compute_fingerprints,[('independent_component_images', 'in_file')])])
+    func_ntwk.connect([(ica, compute_fingerprints,[('mask_image', 'ica_mask_image')])])
+    func_ntwk.connect([(ica, compute_fingerprints,[('independent_component_timecourse', 'time_course_image')])])
+    func_ntwk.connect([(ica, compute_fingerprints,[(('independent_component_images', get_component_index), 'component_index')])])
 
     # Calculates the the t-value threshold for each node/IC
     func_ntwk.connect([(inputnode_within, resampleFunctional,[('functional_images', 'in_file')])])
     func_ntwk.connect([(inputnode_within, resampleFunctional,[('segmentation_file', 'reslice_like')])])
     func_ntwk.connect([(resampleFunctional, connectivity_threshold,[('out_file', 'in_files')])])
-    func_ntwk.connect([(inputnode_within, connectivity_threshold,[('fmri_ICA_timecourse', 'time_course_file')])])
+    func_ntwk.connect([(ica, connectivity_threshold,[('independent_component_timecourse', 'time_course_file')])])
     func_ntwk.connect([(inputnode_within, connectivity_threshold,[('segmentation_file', 'segmentation_file')])])
 
     # Resamples the ICA z-score maps to the same dimensions as the segmentation file
-    func_ntwk.connect([(inputnode_within, resampleICAmaps,[('fmri_ICA_maps', 'in_file')])])
+    func_ntwk.connect([(ica, resampleICAmaps,[('independent_component_images', 'in_file')])])
     func_ntwk.connect([(inputnode_within, resampleICAmaps,[('segmentation_file', 'reslice_like')])])
 
     # Splits the 4d neuronal and non-neuronal images, resamples them, and creates the time-course correlation graph
@@ -348,19 +355,13 @@ def create_fmri_graphs(name="functional", with_simple_timecourse_correlation=Fal
     func_ntwk.connect([(split_neuronal, resample_neuronal,[('out_files', 'in_file')])])
     func_ntwk.connect([(inputnode_within, resample_neuronal,[('segmentation_file', 'reslice_like')])])
 
-    # Calculates the fmri timecourse for the preprocessed fMRI signal
-    func_ntwk.connect([(inputnode_within, simple_regional_timecourses,[('segmentation_file', 'segmentation_file')])])
-    func_ntwk.connect([(createnodes, simple_regional_timecourses,[('node_network', 'resolution_network_file')])])
-    func_ntwk.connect([(resampleFunctional, simple_regional_timecourses,[('out_file', 'in_files')])])
-    simple_regional_timecourses.inputs.out_stats_file = 'fmri_timecourses.mat'
-
-    # Calculates the fmri timecourse for the denoised fMRI signal
+    # Calculates the fmri timecourse
     func_ntwk.connect([(inputnode_within, neuronal_regional_timecourses,[('segmentation_file', 'segmentation_file')])])
     func_ntwk.connect([(createnodes, neuronal_regional_timecourses,[('node_network', 'resolution_network_file')])])
     func_ntwk.connect([(resample_neuronal, neuronal_regional_timecourses,[('out_file', 'in_files')])])
     neuronal_regional_timecourses.inputs.out_stats_file = 'denoised_fmri_timecourse.mat'
 
-    if with_simple_timecourse_correlation:		
+    if with_simple_timecourse_correlation:
         func_ntwk.connect([(inputnode_within, neuronal_time_course_correlation,[('segmentation_file', 'segmentation_file')])])
         func_ntwk.connect([(createnodes, neuronal_time_course_correlation,[('node_network', 'structural_network')])])
         func_ntwk.connect([(resample_neuronal, neuronal_time_course_correlation,[('out_file', 'in_files')])])
@@ -441,7 +442,7 @@ def create_fmri_graphs(name="functional", with_simple_timecourse_correlation=Fal
         outputnode = pe.Node(interface = util.IdentityInterface(fields=["matching_stats", "neuronal_ntwks", "neuronal_cff", "neuronal_regional_timecourse_stats", "correlation_ntwks", "correlation_cff",
         "anticorrelation_ntwks", "anticorrelation_cff", "correlation_stats", "anticorrelation_stats", "simple_correlation_ntwks", "simple_correlation_cff"]), name="outputnode")
     else:
-        outputnode = pe.Node(interface = util.IdentityInterface(fields=["matching_stats", "neuronal_ntwks", "neuronal_cff", "simple_regional_timecourse_stats", "neuronal_regional_timecourse_stats", "correlation_ntwks", "correlation_cff",
+        outputnode = pe.Node(interface = util.IdentityInterface(fields=["matching_stats", "neuronal_ntwks", "neuronal_cff", "neuronal_regional_timecourse_stats", "correlation_ntwks", "correlation_cff",
         "correlation_stats", "anticorrelation_stats", "anticorrelation_ntwks", "anticorrelation_cff"]), name="outputnode")
 
     functional = pe.Workflow(name=name)
@@ -449,9 +450,6 @@ def create_fmri_graphs(name="functional", with_simple_timecourse_correlation=Fal
     functional.base_dir=name
     functional.connect([(inputnode, func_ntwk, [("subject_id", "inputnode_within.subject_id"),
                                               ("functional_images", "inputnode_within.functional_images"),
-                                              ("fmri_ICA_timecourse", "inputnode_within.fmri_ICA_timecourse"),
-                                              ("fmri_ICA_maps", "inputnode_within.fmri_ICA_maps"),
-                                              ("ica_mask_image", "inputnode_within.ica_mask_image"),
                                               ("segmentation_file", "inputnode_within.segmentation_file"),
                                               ("repetition_time", "inputnode_within.repetition_time"),
                                               ("resolution_network_file", "inputnode_within.resolution_network_file")])
@@ -460,8 +458,6 @@ def create_fmri_graphs(name="functional", with_simple_timecourse_correlation=Fal
     functional.connect([(func_ntwk, outputnode,[('grouped_graphs.out_files', 'neuronal_ntwks')])])
     functional.connect([(func_ntwk, outputnode,[('neuronalCFFConverter.connectome_file', 'neuronal_cff')])])
     functional.connect([(func_ntwk, outputnode,[('neuronal_regional_timecourses.stats_file', 'neuronal_regional_timecourse_stats')])])
-    
-    functional.connect([(func_ntwk, outputnode,[('simple_regional_timecourses.stats_file', 'simple_regional_timecourse_stats')])])
 
     functional.connect([(func_ntwk, outputnode,[('remove_unconnected_corr.out_files', 'correlation_ntwks')])])
     functional.connect([(func_ntwk, outputnode,[('correlationCFFConverter.connectome_file', 'correlation_cff')])])
@@ -494,7 +490,7 @@ def create_fmri_graph_grouping_workflow(data_dir, output_dir, name='averaging'):
     field_template_dict = {}
     field_template_dict['networks'] = op.join(output_dir,'%s/*/*%s*.pck')
 
-    l2source.inputs.template_args = template_arg_dict 
+    l2source.inputs.template_args = template_arg_dict
     l2source.inputs.base_directory = data_dir
     l2source.inputs.template = '%s/%s'
     l2source.inputs.field_template = field_template_dict
@@ -513,7 +509,7 @@ def create_fmri_graph_grouping_workflow(data_dir, output_dir, name='averaging'):
                              output_names=["filtered_network_file"],
                              function=remove_unconnected_graphs_and_threshold)
 
-    remove_unconnected_and_threshold = pe.MapNode(interface=remove_unconnected_graphs_and_threshold_interface, 
+    remove_unconnected_and_threshold = pe.MapNode(interface=remove_unconnected_graphs_and_threshold_interface,
                             name='remove_unconnected_and_threshold', iterfield=['in_file'])
 
     nxstats_and_merge_interface = Function(input_names=["network_file", "extra_field"],
