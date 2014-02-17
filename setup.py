@@ -1,10 +1,10 @@
-# emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
-# vi: set ft=python sts=4 ts=4 sw=4 et:
-def configuration(parent_package='',top_path=None):
-    from numpy.distutils.misc_util import Configuration
-    config = Configuration('ComaRestLib', parent_package, top_path)
-    return config
+from distutils.core import setup
+import setuptools
 
-if __name__ == '__main__':
-    from numpy.distutils.core import setup
-    setup(**configuration(top_path='').todict())
+setup(
+    name='coma',
+    version='0.1dev',
+    packages=['coma',],
+    license='',
+    long_description=open('README.md').read(),
+)
