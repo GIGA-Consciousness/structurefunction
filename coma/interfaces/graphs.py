@@ -2,14 +2,13 @@ from nipype.interfaces.base import (BaseInterface, traits,
                                     File, TraitedSpec, InputMultiPath,
                                     isdefined)
 from nipype.utils.filemanip import split_filename
-import os
 import os.path as op
 import numpy as np
 import nibabel as nb
 import networkx as nx
 import scipy.io as sio
 from nipype.workflows.misc.utils import get_data_dims
-from .nx import (remove_all_edges, add_node_data, add_edge_data)
+from nipype.interfaces.cmtk.nx import (remove_all_edges, add_node_data, add_edge_data)
 from nipype import logging
 iflogger = logging.getLogger('interface')
 
