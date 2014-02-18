@@ -6,19 +6,16 @@ import nipype.interfaces.cmtk as cmtk
 import nipype.interfaces.freesurfer as fs
 import nipype.pipeline.engine as pe          # pypeline engine
 
-from forward.datasets import sample
+from coma.datasets import sample
 data_path = sample.data_path()
 
 subjects_dir = op.join(data_path,"subjects")
-
-fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
-
 output_dir = op.abspath('fmri_timecourses')
 
 info = dict(functional_images=[['subject_id', '*swvmsrf*']],
             segmentation_file=[['subject_id','*ROI_scale500*']])
 
-subject_list = ['Deab88']
+subject_list = ['Bend1']
 
 infosource = pe.Node(interface=util.IdentityInterface(fields=['subject_id']),
                      name="infosource")
@@ -28,8 +25,8 @@ datasource = pe.Node(interface=nio.DataGrabber(infields=['subject_id'],
                      name = 'datasource')
 
 datasource.inputs.template = "%s/%s"
-datasource.inputs.base_directory = data_dir
-datasource.inputs.field_template = dict(functional_images='%s/restMotionProcessed/%s.img', segmentation_file='%s/%s.nii.gz')
+datasource.inputs.base_directory = data_path
+datasource.inputs.field_template = dict(functional_images='data/%s/restMotionProcessed/%s.img', segmentation_file='data/%s/%s.nii.gz')
 datasource.inputs.template_args = info
 datasource.inputs.sort_filelist = True
 

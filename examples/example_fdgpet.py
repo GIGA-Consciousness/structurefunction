@@ -27,6 +27,7 @@ datasource.inputs.template = "%s/%s"
 datasource.inputs.base_directory = data_path
 datasource.inputs.field_template = dict(fdg_pet_image='data/%s/.nii')
 datasource.inputs.template_args = info
+datasource.inputs.sort_filelist = True
 
 parcellate = pe.Node(interface=cmtk.Parcellate(), name="parcellate")
 parcellate.inputs.subjects_dir = subjects_dir

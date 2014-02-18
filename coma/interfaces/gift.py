@@ -23,6 +23,7 @@ class SingleSubjectICAOutputSpec(TraitedSpec):
     subject_mat_file = File(exists=True, desc='Subject MATLAB .mat file')
     results_log_file = File(exists=True, desc='Results log file')
     independent_component_images = OutputMultiPath(File, exists=True, desc='ICA mask image')
+    independent_component_timecourse = File(exists=True, desc='IC timecourse image')
 
 class SingleSubjectICA(BaseInterface):
     """
@@ -139,6 +140,7 @@ class SingleSubjectICA(BaseInterface):
         outputs['ica_mat_file'] = ica_mat_file
         outputs['subject_mat_file'] = subject_mat_file
         outputs['results_log_file'] = results_log_file
-        outputs['independent_component_images'] = out_mask_image
+        outputs['independent_component_images'] = glob.glob(op.abspath(op.join("components",prefix + "_component_ica_s1*")))
+        outputs['independent_component_timecourse'] = glob.glob(op.abspath(op.join("components",prefix + "_timecourses_ica_s1*")))
         print outputs
         return outputs

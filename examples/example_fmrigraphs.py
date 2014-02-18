@@ -26,14 +26,23 @@ datasource = pe.Node(interface=nio.DataGrabber(infields=['subject_id'],
                      name = 'datasource')
 
 datasource.inputs.template = "%s/%s"
-datasource.inputs.base_directory = data_dir
-datasource.inputs.field_template = dict(functional_images='%s/restMotionProcessed/%s.img', fmri_ICA_timecourse='%s/restICA/components/%s.img', fmri_ICA_maps='%s/restICA/components/%s.img', ica_mask_image='%s/restICA/%s.img')
+datasource.inputs.base_directory = data_path
+datasource.inputs.field_template = dict(functional_images='data/%s/restMotionProcessed/%s.img',
+   fmri_ICA_timecourse='data/%s/restICA/components/%s.img', fmri_ICA_maps='data/%s/restICA/components/%s.img',
+   ica_mask_image='data/%s/restICA/%s.img')
 datasource.inputs.template_args = info
+datasource.inputs.sort_filelist = True
 
 parcellate = pe.Node(interface=cmtk.Parcellate(), name="parcellate")
 parcellate.inputs.subjects_dir = subjects_dir
 
 funky = create_fmri_graphs("funkytest")
+
+import cmp
+cmp_config = cmp.configuration.PipelineConfiguration()
+cmp_config.parcellation_scheme = "Lausanne2008"
+parcellation_name = 'scale500'
+
 funky.inputs.inputnode.resolution_network_file = cmp_config._get_lausanne_parcellation('Lausanne2008')[parcellation_name]['node_information_graphml']
 funky.inputs.inputnode.repetition_time = 2.4
 

@@ -9,58 +9,12 @@ import nipype.interfaces.dipy as dipy
 import nipype.algorithms.misc as misc
 import inspect
 import os.path as op                      # system functions
-from ..fsl.epi import create_eddy_correct_pipeline
-from ..connectivity.nx import create_networkx_pipeline, create_cmats_to_csv_pipeline
-from ...misc.utils import select_aparc_annot
+from nipype.workflows.dmri.fsl.epi import create_eddy_correct_pipeline
+from nipype.workflows.dmri.connectivity.nx import create_networkx_pipeline, create_cmats_to_csv_pipeline
+from nipype.workflows.misc.utils import select_aparc_annot
 
 
 def create_connectivity_pipeline(name="connectivity", parcellation_name='scale500'):
-    """Creates a pipeline that does the same connectivity processing as in the
-    :ref:`example_dmri_connectivity_advanced` example script. Given a subject id (and completed Freesurfer reconstruction)
-    diffusion-weighted image, b-values, and b-vectors, the workflow will return the subject's connectome
-    as a Connectome File Format (CFF) file for use in Connectome Viewer (http://www.cmtk.org).
-
-    Example
-    -------
-
-    >>> from nipype.workflows.dmri.mrtrix.connectivity_mapping import create_connectivity_pipeline
-    >>> conmapper = create_connectivity_pipeline("nipype_conmap")
-    >>> conmapper.inputs.inputnode.subjects_dir = '.'
-    >>> conmapper.inputs.inputnode.subject_id = 'subj1'
-    >>> conmapper.inputs.inputnode.dwi = 'data.nii.gz'
-    >>> conmapper.inputs.inputnode.bvecs = 'bvecs'
-    >>> conmapper.inputs.inputnode.bvals = 'bvals'
-    >>> conmapper.run()                 # doctest: +SKIP
-
-    Inputs::
-
-        inputnode.subject_id
-        inputnode.subjects_dir
-        inputnode.dwi
-        inputnode.bvecs
-        inputnode.bvals
-        inputnode.resolution_network_file
-
-    Outputs::
-
-        outputnode.connectome
-        outputnode.cmatrix
-        outputnode.networks
-        outputnode.fa
-        outputnode.struct
-        outputnode.tracts
-        outputnode.rois
-        outputnode.odfs
-        outputnode.filtered_tractography
-        outputnode.tdi
-        outputnode.nxstatscff
-        outputnode.nxcsv
-        outputnode.cmatrices_csv
-        outputnode.mean_fiber_length
-        outputnode.median_fiber_length
-        outputnode.fiber_length_std
-    """
-
     inputnode_within = pe.Node(util.IdentityInterface(fields=["subject_id",
                                                               "dwi",
                                                               "bvecs",

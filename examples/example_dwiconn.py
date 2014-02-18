@@ -25,9 +25,10 @@ datasource = pe.Node(interface=nio.DataGrabber(infields=['subject_id'],
                      name='datasource')
 
 datasource.inputs.template = "%s/%s"
-datasource.inputs.base_directory = data_dir
+datasource.inputs.base_directory = data_path
 datasource.inputs.field_template = dict(dwi='data/%s/%s.nii.gz', bvecs='data/%s/%s', bvals='data/%s/%s')
 datasource.inputs.template_args = info
+datasource.inputs.sort_filelist = True
 
 structural = create_connectivity_pipeline("structural")
 #structural.inputnode.inputs.resolution_network_file = 
@@ -35,11 +36,11 @@ structural.inputs.inputnode.subjects_dir = subjects_dir
 
 # It's recommended to use low max harmonic order in damaged brains
 lmax = 6
-structural.inputs.connectivity.mapping.csdeconv.maximum_harmonic_order = lmax
-structural.inputs.connectivity.mapping.estimateresponse.maximum_harmonic_order = lmax
+structural.inputs.mapping.csdeconv.maximum_harmonic_order = lmax
+structural.inputs.mapping.estimateresponse.maximum_harmonic_order = lmax
 
 # Required for scans from C.H.U Liege
-structural.inputs.connectivity.mapping.fsl2mrtrix.invert_x = True
+structural.inputs.mapping.fsl2mrtrix.invert_x = True
 
 datasink = pe.Node(interface=nio.DataSink(), name="datasink")
 datasink.inputs.base_directory = output_dir

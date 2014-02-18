@@ -23,14 +23,14 @@ datasource = pe.Node(interface=nio.DataGrabber(infields=['subject_id'],
                      name='datasource')
 
 datasource.inputs.template = "%s/%s"
-datasource.inputs.base_directory = data_dir
-datasource.inputs.field_template = dict(fdg_pet_image='%s/.nii')
-datasource.inputs.field_template = dict(functional_images='%s/restMotionProcessed/%s.img',
-    segmentation_file="%s/%s.nii.gz")
+datasource.inputs.base_directory = data_path
+datasource.inputs.field_template = dict(functional_images='data/%s/restMotionProcessed/%s.img',
+    segmentation_file="data/%s/%s.nii.gz")
 datasource.inputs.template_args = info
+datasource.inputs.sort_filelist = True
 
 denoised = create_denoised_timecourse_workflow("denoised")
-denoised.inputnode.inputs.repetition_time = 2.4
+denoised.inputs.inputnode.repetition_time = 2.4
 
 datasink = pe.Node(interface=nio.DataSink(), name="datasink")
 datasink.inputs.base_directory = output_dir

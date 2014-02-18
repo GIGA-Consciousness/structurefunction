@@ -43,7 +43,7 @@ def create_denoised_timecourse_workflow(name="denoised"):
     compute_fingerprints.inputs.coma_rest_lib_path = coma_rest_lib_path
 
     # Create nodes for ConnectomeViewer and calculate the neuronal timecourses
-    createnodes = pe.Node(interface=cmtk.CreateNodes(), name="CreateNodes")
+    #createnodes = pe.Node(interface=cmtk.CreateNodes(), name="CreateNodes")
 
     split_neuronal = pe.Node(interface=fsl.Split(), name='split_neuronal')
     split_neuronal.inputs.dimension = 't'
@@ -59,17 +59,15 @@ def create_denoised_timecourse_workflow(name="denoised"):
     workflow.connect([(inputnode, ica,[('subject_id', 'prefix')])])
 
     # Create Nodes from segmentation file
-    workflow.connect([(inputnode, createnodes,[('segmentation_file', 'roi_file')])])
+    #workflow.connect([(inputnode, createnodes,[('segmentation_file', 'roi_file')])])
 
     # Create the denoised image
-    workflow.connect([(inputnode, denoised_image,[('subject_id', 'prefix')])])
     workflow.connect([(inputnode, denoised_image,[('repetition_time', 'repetition_time')])])
     workflow.connect([(ica, denoised_image,[('independent_component_images', 'in_files')])])
     workflow.connect([(ica, denoised_image,[('mask_image', 'ica_mask_image')])])
     workflow.connect([(ica, denoised_image,[('independent_component_timecourse', 'time_course_image')])])
 
     # Runs the matching classification
-    workflow.connect([(inputnode, matching_classification,[('subject_id', 'prefix')])])
     workflow.connect([(inputnode, matching_classification,[('repetition_time', 'repetition_time')])])
     workflow.connect([(ica, matching_classification,[('independent_component_images', 'in_files')])])
     workflow.connect([(ica, matching_classification,[('mask_image', 'ica_mask_image')])])
@@ -93,8 +91,8 @@ def create_denoised_timecourse_workflow(name="denoised"):
 
     # Calculates the fmri timecourse
     workflow.connect([(inputnode, neuronal_regional_timecourses,[('segmentation_file', 'segmentation_file')])])
-    workflow.connect([(createnodes, neuronal_regional_timecourses,[('node_network', 'resolution_network_file')])])
     workflow.connect([(resample_neuronal, neuronal_regional_timecourses,[('out_file', 'in_files')])])
+    #workflow.connect([(createnodes, neuronal_regional_timecourses,[('node_network', 'resolution_network_file')])])
 
     # Send stats to outputnode
     workflow.connect([(neuronal_regional_timecourses, outputnode,[('stats_file', 'stats_file')])])
