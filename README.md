@@ -6,28 +6,31 @@ Other methods, such as fMRI IC graph analysis, simple fMRI timecourse correlatio
 
 Installation
 ------------
-* First, clone the repository and install the python package
+1. First, clone the repository and install the python package
 
-    git clone https://github.com/swederik/structurefunction.git
-    cd structurefunction
-    python setup.py install
+        git clone https://github.com/swederik/structurefunction.git
+        cd structurefunction
+        python setup.py install
 
-* Next, make sure you have GIFT ICA (if you want to run ICA) and the Rest Library in your MATLAB path.
+2. Next, make sure you have GIFT ICA (if you want to run ICA) and the Rest Library in your MATLAB path.
+    * Download it from here: http://mialab.mrn.org/software/gift/index.html
+    * Make sure to use "Add with Subfolders" in MATLAB.
 
-* Download it from here: http://mialab.mrn.org/software/gift/index.html and make sure to use "Add with Subfolders" in MATLAB.
+3. Add two environment variables pointing to the Rest Library and the structurefunction repository:
 
-* Add two environment variables pointing to the Rest Library and the structurefunction repository:
-
-    export COMA_REST_LIB_ROOT=/path/to/structurefunction/RestLib
-    export COMA_DIR=/path/to/structurefunction
+        export COMA_REST_LIB_ROOT=/path/to/structurefunction/RestLib
+        export COMA_DIR=/path/to/structurefunction
     
-if you are using bash or zsh.
+    if you are using bash or zsh, add them to your ( ~/.bashrc or  ~/.zshrc). For csh (~/.cshrc), add:
+    
+        setenv COMA_REST_LIB_ROOT /path/to/structurefunction/RestLib
+        setenv COMA_DIR /path/to/structurefunction
 
-* Make sure the RestLib is in your MATLAB path.
+4. Make sure the RestLib is in your MATLAB path.
 
-* You may need to run:
+5. OPTIONAL: If RestLib is not checked out and the folder is empty, you may need to run:
 
-    git submodule update --init --recursive
+        git submodule update --init --recursive
 
 
 
