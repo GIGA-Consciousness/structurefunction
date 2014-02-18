@@ -10,9 +10,9 @@ data_path = sample.data_path()
 subjects_dir = op.join(data_path,"subjects")
 output_dir = op.abspath('dwi_connectome')
 
-info = dict(dwi=[['subject_id', '*DTI']],
-            bvecs=[['subject_id', '*bvecs']],
-            bvals=[['subject_id', '*bvals']])
+info = dict(dwi=[['subject_id', 'dwi']],
+            bvecs=[['subject_id', 'bvecs']],
+            bvals=[['subject_id', 'bvals']])
 
 subject_list = ['Bend1']
 
@@ -26,7 +26,7 @@ datasource = pe.Node(interface=nio.DataGrabber(infields=['subject_id'],
 
 datasource.inputs.template = "%s/%s"
 datasource.inputs.base_directory = data_dir
-datasource.inputs.field_template = dict(dwi='%s/%s.nii.gz', bvecs='%s/%s', bvals='%s/%s')
+datasource.inputs.field_template = dict(dwi='data/%s/%s.nii.gz', bvecs='data/%s/%s', bvals='data/%s/%s')
 datasource.inputs.template_args = info
 
 structural = create_connectivity_pipeline("structural")

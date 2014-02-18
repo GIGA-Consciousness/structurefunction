@@ -29,7 +29,7 @@ def _data_path(path=None, force_update=False, update_path=True,
 
     if name == 'example':
         archive_name = "ComaSample.tar.gz"
-        url = "https://www.dropbox.com/s/dr7qx6hbv7myxdc/" + archive_name + "?dl=1"
+        url = "https://www.dropbox.com/s/thpu5cph0hv94bz/" + archive_name + "?dl=1"
         folder_name = "ComaSample"
         folder_path = op.join(path, folder_name)
         rm_archive = False

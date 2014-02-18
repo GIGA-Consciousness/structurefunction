@@ -4,7 +4,7 @@ import os.path as op
 import nipype.interfaces.cmtk as cmtk
 import nipype.interfaces.freesurfer as fs
 import nipype.pipeline.engine as pe          # pypeline engine
-import coma
+import coma.interfaces as ci
 
 from coma.datasets import sample
 data_path = sample.data_path()
@@ -24,8 +24,8 @@ datasource = pe.Node(interface=nio.DataGrabber(infields=['subject_id'],
                      name='datasource')
 
 datasource.inputs.template = "%s/%s"
-datasource.inputs.base_directory = data_dir
-datasource.inputs.field_template = dict(fdg_pet_image='%s/.nii')
+datasource.inputs.base_directory = data_path
+datasource.inputs.field_template = dict(fdg_pet_image='data/%s/.nii')
 datasource.inputs.template_args = info
 
 parcellate = pe.Node(interface=cmtk.Parcellate(), name="parcellate")
@@ -34,7 +34,7 @@ parcellate.inputs.subjects_dir = subjects_dir
 resample_fdg_pet = pe.Node(interface=fs.MRIConvert(), name='resample_fdg_pet')
 resample_fdg_pet.inputs.out_type = 'nii'
 
-regional_metabolism = pe.Node(interface=coma.RegionalValues(), name="regional_metabolism")
+regional_metabolism = pe.Node(interface=ci.RegionalValues(), name="regional_metabolism")
 regional_metabolism.inputs.out_stats_file = 'regional_fdg_uptake.mat'
 
 datasink = pe.Node(interface=nio.DataSink(), name="datasink")
