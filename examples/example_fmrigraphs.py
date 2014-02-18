@@ -5,8 +5,10 @@ import nipype.interfaces.cmtk as cmtk
 import nipype.pipeline.engine as pe          # pypeline engine
 from nipype.workflows.rsfmri.coma.fmri_graphs import create_fmri_graphs, create_fmri_graph_grouping_workflow
 
-data_dir = '/media/BlackBook/ERIKPETDTIFMRI/ControlsPETDTI'
-subjects_dir = '/media/BlackBook/ERIKPETDTIFMRI/subjects_normalized/controls'
+from coma.datasets import sample
+data_path = sample.data_path()
+
+subjects_dir = op.join(data_path,"subjects_normalized")
 output_dir = op.abspath('fmrigraphs')
 
 info = dict(functional_images=[['subject_id', '*swvmsrf*']],

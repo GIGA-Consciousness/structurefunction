@@ -6,8 +6,10 @@ import nipype.interfaces.freesurfer as fs
 import nipype.pipeline.engine as pe          # pypeline engine
 import coma
 
-data_dir = '/media/BlackBook/ERIKPETDTIFMRI/ControlsPETDTI'
-subjects_dir = '/media/BlackBook/ERIKPETDTIFMRI/subjects_normalized/controls'
+from coma.datasets import sample
+data_path = sample.data_path()
+
+subjects_dir = op.join(data_path,"subjects")
 output_dir = op.abspath('fdgpet')
 
 info = dict(fdg_pet_image=[['subject_id', '*fswp*']],)
