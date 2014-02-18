@@ -144,6 +144,7 @@ class CreateDenoisedImage(BaseInterface):
 
 
 class MatchingClassificationInputSpec(BaseInterfaceInputSpec):
+    subject_id = traits.Str(desc='Subject ID')
     in_files = InputMultiPath(File(exists=True), mandatory=True,
                               desc='The input ICA maps as separate images')
     in_file4d = File(exists=True, mandatory=True, xor=['in_files'],
@@ -237,6 +238,8 @@ class MatchingClassification(BaseInterface):
         out_stats_file = op.abspath(self.inputs.out_stats_file)
         d = dict(
             out_stats_file=out_stats_file, data_dir=data_dir, mask_name=mask_file,
+            timecourse=op.abspath(self.inputs.time_course_image),
+            subj_id=self.inputs.subject_id,
             nComponents=nComponents, Tr=repetition_time, coma_rest_lib_path=coma_rest_lib_path)
 
         script = Template("""
@@ -249,7 +252,10 @@ class MatchingClassification(BaseInterface):
         Tr = $Tr;
         data_dir = '$data_dir'
         mask_name = '$mask_name'
-        [dataAssig maxGoF] = selectionMatchClassification(data_dir, mask_name, namesTemplate,indexNeuronal,nCompo,Tr,restlib_path)
+        subj_id = '$subj_id'
+        time_course_name = '$timecourse'
+
+        [dataAssig maxGoF] = selectionMatchClassification(data_dir, subj_id, mask_name, time_course_name, namesTemplate,indexNeuronal,nCompo,Tr,restlib_path)
                             
         for i=1:size(dataAssig,1)
             str{i} = sprintf('Template %d: %s to component %d with GoF %f is neuronal %d prob=%f',dataAssig(i,1),namesTemplate{i},dataAssig(i,2),dataAssig(i,3),dataAssig(i,4),dataAssig(i,5));

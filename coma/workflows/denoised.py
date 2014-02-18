@@ -5,6 +5,7 @@ import nipype.interfaces.cmtk as cmtk
 import nipype.interfaces.fsl as fsl
 import nipype.interfaces.freesurfer as fs
 import nipype.pipeline.engine as pe
+import coma.interfaces as ci
 
 from ..interfaces import SingleSubjectICA, CreateDenoisedImage, MatchingClassification, ComputeFingerprint
 from ..helpers import get_component_index
@@ -50,7 +51,7 @@ def create_denoised_timecourse_workflow(name="denoised"):
 
     split_neuronal = split_ICs.clone("split_neuronal")
 
-    neuronal_regional_timecourses = pe.Node(interface=cmtk.RegionalValues(), name="neuronal_regional_timecourses")
+    neuronal_regional_timecourses = pe.Node(interface=ci.RegionalValues(), name="neuronal_regional_timecourses")
     neuronal_regional_timecourses.inputs.out_stats_file = 'denoised_fmri_timecourse.mat'
 
     # --------- Create the workflow ---------#

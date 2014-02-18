@@ -50,3 +50,4 @@ workflow.connect(
 
 workflow.run()
 #workflow.run(plugin='MultiProc', plugin_args={'n_procs' : 3})
+workflow.write_graph()
