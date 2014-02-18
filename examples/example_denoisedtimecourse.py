@@ -4,9 +4,11 @@ import os.path as op
 import nipype.pipeline.engine as pe          # pypeline engine
 from coma.workflows.denoised import create_denoised_timecourse_workflow
 
-data_dir = '/media/BlackBook/ERIKPETDTIFMRI/ControlsPETDTI'
-subjects_dir = '/media/BlackBook/ERIKPETDTIFMRI/subjects_normalized/controls'
-output_dir = op.abspath('fdgpet')
+from coma.datasets import sample
+data_path = sample.data_path()
+
+subjects_dir = op.join(data_path,"subjects_normalized")
+output_dir = op.abspath('denoised_timecourse')
 
 info = dict(segmentation_file=[['subject_id', '*_scale500']],
             functional_images=[['subject_id', '*swvmsrf*']])

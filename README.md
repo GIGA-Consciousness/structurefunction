@@ -13,9 +13,10 @@ First, clone the repository and install the python package
     python setup.py install
 
 Next, make sure you have GIFT ICA (if you want to run ICA) and the Rest Library in your MATLAB path.
-Finally, add an environment variable pointing to the Rest Library:
+Finally, add two environment variables pointing to the Rest Library and the structurefunction repository:
 
-    export COMA_REST_LIB_ROOT=/path/to/restlib
+    export COMA_REST_LIB_ROOT=/path/to/structurefunction/RestLib
+    export COMA_DIR=/path/to/structurefunction
     
 if you are using bash or zsh.
 
