@@ -22,7 +22,7 @@ class SingleSubjectICAOutputSpec(TraitedSpec):
     ica_mat_file = File(exists=True, desc='ICA MATLAB .mat file')
     subject_mat_file = File(exists=True, desc='Subject MATLAB .mat file')
     results_log_file = File(exists=True, desc='Results log file')
-    independent_component_images = OutputMultiPath(File, exists=True, desc='ICA mask image')
+    independent_component_images = File(exists=True, desc='4D set of independent component images')
     independent_component_timecourse = File(exists=True, desc='IC timecourse image')
 
 class SingleSubjectICA(BaseInterface):
@@ -134,15 +134,13 @@ class SingleSubjectICA(BaseInterface):
         ica_mat_file = op.abspath(prefix + '_ica.mat')
         subject_mat_file = op.abspath(prefix + 'Subject.mat')
         results_log_file = op.abspath(prefix + '_results.log')
-        import ipdb
-        ipdb.set_trace()
-        
         outputs['mask_image'] = out_mask_image
         outputs['parameter_mat_file'] = parameter_mat_file
         outputs['ica_mat_file'] = ica_mat_file
         outputs['subject_mat_file'] = subject_mat_file
         outputs['results_log_file'] = results_log_file
-        outputs['independent_component_images'] = glob.glob(op.abspath(op.join("components",prefix + "_component_ica_s1*")))
-        outputs['independent_component_timecourse'] = glob.glob(op.abspath(op.join("components",prefix + "_timecourses_ica_s1*")))
+        outputs['independent_component_images'] = op.abspath(prefix + "_sub01_component_ica_s1_.nii")
+        outputs['independent_component_timecourse'] = op.abspath(prefix + "_sub01_timecourses_ica_s1_.nii")
+
         print outputs
         return outputs

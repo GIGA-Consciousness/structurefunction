@@ -45,8 +45,10 @@ def create_denoised_timecourse_workflow(name="denoised"):
     # Create nodes for ConnectomeViewer and calculate the neuronal timecourses
     #createnodes = pe.Node(interface=cmtk.CreateNodes(), name="CreateNodes")
 
-    split_neuronal = pe.Node(interface=fsl.Split(), name='split_neuronal')
-    split_neuronal.inputs.dimension = 't'
+    split_ICs = pe.Node(interface=fsl.Split(), name='split_ICs')
+    split_ICs.inputs.dimension = 't'
+
+    split_neuronal = split_ICs.clone("split_neuronal")
 
     neuronal_regional_timecourses = pe.Node(interface=cmtk.RegionalValues(), name="neuronal_regional_timecourses")
     neuronal_regional_timecourses.inputs.out_stats_file = 'denoised_fmri_timecourse.mat'
@@ -63,19 +65,20 @@ def create_denoised_timecourse_workflow(name="denoised"):
 
     # Create the denoised image
     workflow.connect([(inputnode, denoised_image,[('repetition_time', 'repetition_time')])])
-    workflow.connect([(ica, denoised_image,[('independent_component_images', 'in_files')])])
+    workflow.connect([(ica, split_ICs,[('independent_component_images', 'in_file')])])
+    workflow.connect([(split_ICs, denoised_image,[('out_files', 'in_files')])])
     workflow.connect([(ica, denoised_image,[('mask_image', 'ica_mask_image')])])
     workflow.connect([(ica, denoised_image,[('independent_component_timecourse', 'time_course_image')])])
 
     # Runs the matching classification
     workflow.connect([(inputnode, matching_classification,[('repetition_time', 'repetition_time')])])
-    workflow.connect([(ica, matching_classification,[('independent_component_images', 'in_files')])])
+    workflow.connect([(split_ICs, matching_classification,[('out_files', 'in_files')])])
     workflow.connect([(ica, matching_classification,[('mask_image', 'ica_mask_image')])])
     workflow.connect([(ica, matching_classification,[('independent_component_timecourse', 'time_course_image')])])
 
     # Computes and saves the fingerprint for each IC
     workflow.connect([(inputnode, compute_fingerprints,[('repetition_time', 'repetition_time')])])
-    workflow.connect([(ica, compute_fingerprints,[('independent_component_images', 'in_file')])])
+    workflow.connect([(split_ICs, compute_fingerprints,[('out_files', 'in_file')])])
     workflow.connect([(ica, compute_fingerprints,[('mask_image', 'ica_mask_image')])])
     workflow.connect([(ica, compute_fingerprints,[('independent_component_timecourse', 'time_course_image')])])
     workflow.connect([(ica, compute_fingerprints,[(('independent_component_images', get_component_index), 'component_index')])])

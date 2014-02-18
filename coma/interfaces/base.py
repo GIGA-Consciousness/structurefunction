@@ -210,7 +210,7 @@ class MatchingClassification(BaseInterface):
             print 'Copied!'
 
         else:
-            print 'Single functional image provided. Ending...'
+            raise Exception('Single functional image provided. Ending...')
             in_files = self.inputs.in_files
 
         nComponents = len(in_files)
