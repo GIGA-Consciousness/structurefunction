@@ -134,7 +134,9 @@ class SingleSubjectICA(BaseInterface):
         ica_mat_file = op.abspath(prefix + '_ica.mat')
         subject_mat_file = op.abspath(prefix + 'Subject.mat')
         results_log_file = op.abspath(prefix + '_results.log')
-
+        import ipdb
+        ipdb.set_trace()
+        
         outputs['mask_image'] = out_mask_image
         outputs['parameter_mat_file'] = parameter_mat_file
         outputs['ica_mat_file'] = ica_mat_file
