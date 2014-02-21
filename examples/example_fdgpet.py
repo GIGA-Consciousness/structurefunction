@@ -25,7 +25,7 @@ datasource = pe.Node(interface=nio.DataGrabber(infields=['subject_id'],
 
 datasource.inputs.template = "%s/%s"
 datasource.inputs.base_directory = data_path
-datasource.inputs.field_template = dict(fdg_pet_image='data/%s/.nii')
+datasource.inputs.field_template = dict(fdg_pet_image='data/%s/%s.nii')
 datasource.inputs.template_args = info
 datasource.inputs.sort_filelist = True
 
