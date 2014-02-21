@@ -5,13 +5,12 @@ import nipype.interfaces.fsl as fsl
 import nipype.interfaces.freesurfer as fs
 import nipype.interfaces.mrtrix as mrtrix
 import nipype.interfaces.cmtk as cmtk
-from nipype.interfaces.utility import Function
 from nipype.workflows.misc.utils import select_aparc
 import nipype.interfaces.ants as ants
 
 fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
 
-from coma.interfaces import RegionalValues, nonlinfit_fn
+from coma.interfaces import RegionalValues, nonlinfit_fn, CMR_glucose
 
 
 def extract_PreCoTh(in_file):
@@ -86,9 +85,14 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic'):
         interface=util.IdentityInterface(fields=["subjects_dir",
                                                  "subject_id",
                                                  "dwi",
-                                                 "fdgpet",
                                                  "bvecs",
-                                                 "bvals"]),
+                                                 "bvals",
+                                                 "fdgpet",
+                                                 "dose",
+                                                 "weight",
+                                                 "delay",
+                                                 "glycemie",
+                                                 "scan_time"]),
         name="inputnode")
 
     nonlinfit_interface = util.Function(input_names=["dwi", "bvecs", "bvals", "base_name"],
@@ -168,7 +172,7 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic'):
 
 
     get_wm_mask = pe.Node(interface=fsl.ImageMaths(), name='get_wm_mask')
-    get_wm_mask.inputs.op_string = "-thr 0.3"
+    get_wm_mask.inputs.op_string = "-thr 0.1"
 
     MRmultiply = pe.Node(interface=mrtrix.MRMultiply(), name='MRmultiply')
     MRmultiply.inputs.out_filename = "Eroded_FA.nii.gz"
@@ -177,6 +181,10 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic'):
     median3d = pe.Node(interface=mrtrix.MedianFilter3D(), name='median3D')
 
     fdgpet_regions = pe.Node(interface=RegionalValues(), name='fdgpet_regions')
+
+    compute_cmr_glc_interface = util.Function(input_names=["in_file", "dose", "weight", "delay",
+        "glycemie", "scan_time"], output_names=["out_file"], function=CMR_glucose)
+    compute_cmr_glc = pe.Node(interface=compute_cmr_glc_interface, name='compute_cmr_glc')
 
     csdeconv = pe.Node(interface=mrtrix.ConstrainedSphericalDeconvolution(),
                        name='csdeconv')
@@ -198,7 +206,7 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic'):
 
     tck2trk = pe.Node(interface=mrtrix.MRTrix2TrackVis(), name='tck2trk')
 
-    extract_PreCoTh_interface = Function(input_names=["in_file"],
+    extract_PreCoTh_interface = util.Function(input_names=["in_file"],
                                          output_names=["out_file"],
                                          function=extract_PreCoTh)
 
@@ -242,12 +250,19 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic'):
     workflow.connect(inputnode, 'subject_id', nonlinfit_node, 'base_name')
     workflow.connect(inputnode, 'bvecs', nonlinfit_node, 'bvecs')
     workflow.connect(inputnode, 'bvals', nonlinfit_node, 'bvals')
-
     workflow.connect([(inputnode, reslice_fdgpet, [("fdgpet", "in_file")])])
+    workflow.connect([(inputnode, compute_cmr_glc, [("dose", "dose")])])
+    workflow.connect([(inputnode, compute_cmr_glc, [("weight", "weight")])])
+    workflow.connect([(inputnode, compute_cmr_glc, [("delay", "delay")])])
+    workflow.connect([(inputnode, compute_cmr_glc, [("glycemie", "glycemie")])])
+    workflow.connect([(inputnode, compute_cmr_glc, [("scan_time", "scan_time")])])
+
     workflow.connect(
         [(mri_convert_ROIs, reslice_fdgpet, [("out_file", "reslice_like")])])
     workflow.connect(
-        [(reslice_fdgpet, fdgpet_regions, [("out_file", "in_files")])])
+        [(reslice_fdgpet, compute_cmr_glc, [("out_file", "in_file")])])
+    workflow.connect(
+        [(compute_cmr_glc, fdgpet_regions, [("out_file", "in_files")])])
     workflow.connect(
         [(thalamus2precuneus2cortex_ROIs, fdgpet_regions, [("out_file", "segmentation_file")])])
 
@@ -335,3 +350,33 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic'):
          (nonlinfit_node, outputnode, [("MD", "md")])])
 
     return workflow
+
+
+def return_subject_data(subject_id, data_file):
+    import csv
+    f = open(data_file, 'r')
+    csv_line_by_line = csv.reader(f)
+    found = False
+    # Must be stored in this order!:
+    # 'subject_id', 'dose', 'weight', 'delay', 'glycemie', 'scan_time']
+    for line in csv_line_by_line:
+
+        if line[0] == subject_id:
+            print 'Subject %s found' % subject_id
+            dose = float(line[1])
+            print 'Dose: %s' % dose
+            weight = float(line[2])
+            print 'Weight: %s' % weight
+            delay = float(line[3])
+            print 'Delay: %s' % delay
+            glycemie = float(line[4])
+            print 'Glycemie: %s' % glycemie
+            scan_time = float(line[5])
+            print 'Scan Time: %s' % scan_time
+            found = True
+            break
+
+    if not found:
+        raise Exception("Subject id %s was not in the data file!" % subject_id)
+
+    return dose, weight, delay, glycemie, scan_time

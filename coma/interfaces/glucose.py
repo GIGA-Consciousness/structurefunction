@@ -61,4 +61,4 @@ def CMR_glucose(in_file, dose, weight, delay, glycemie, scan_time=15):
     out_file = op.abspath(name + '_CMRGLC2.nii.gz')
 
     nb.save(rescaled_image, out_file)
-    return out_file, cax2, mecalc, denom
+    return out_file
