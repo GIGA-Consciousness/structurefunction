@@ -86,7 +86,7 @@ class RegionalValues(BaseInterface):
         if isdefined(self.inputs.resolution_network_file):
             try:
                 gp = nx.read_gpickle(self.inputs.resolution_network_file)
-            except IndexError:
+            except:
                 gp = nx.read_graphml(self.inputs.resolution_network_file)
             nodedict = gp.node[gp.nodes()[0]]
             if not nodedict.has_key('dn_position'):
@@ -103,7 +103,7 @@ class RegionalValues(BaseInterface):
             else:
                 ntwkname = self.inputs.resolution_network_file
 
-            rois = gp.nodes()
+            rois = get_roi_list(self.inputs.segmentation_file)
             roi_mean_tc, roi_max_tc, roi_min_tc, roi_std_tc, voxels = get_timecourse_by_region(
                 in_files, self.inputs.segmentation_file, rois)
 
@@ -134,8 +134,7 @@ class RegionalValues(BaseInterface):
                         iflogger.error(np.shape(per_file_stats[key]))
                         iflogger.error(
                             "Double-check the subjects' freesurfer directory.")
-                        import ipdb
-                        ipdb.set_trace()
+
                         raise Exception(
                             "There may not be enough regions in the segmentation file!")
 

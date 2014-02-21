@@ -37,11 +37,13 @@ datasource.inputs.template = "%s/%s"
 datasource.inputs.base_directory = data_path
 datasource.inputs.field_template = dict(dwi='data/%s/%s.nii.gz',
   bvecs='data/%s/%s', bvals='data/%s/%s',
-  fdg_pet_image='data/%s/%s.nii')
+  fdg_pet_image='data/%s/%s.nii.gz')
 datasource.inputs.template_args = info
+datasource.inputs.sort_filelist = True
 
 datasink = pe.Node(interface=nio.DataSink(), name="datasink")
 datasink.inputs.base_directory = output_dir
+datasink.overwrite = True
 
 
 dti = create_precoth_pipeline("coma_precoth")
@@ -53,7 +55,7 @@ dti.inputs.fsl2mrtrix.invert_x = True
 dti.inputs.fsl2mrtrix.invert_y = False
 dti.inputs.inputnode.subjects_dir = subjects_dir
 dti.inputs.thalamus2precuneus2cortex.resolution_network_file = res_ntwk_file
-dti.inputs.fdgpet_regions.resolution_network_file = res_ntwk_file
+#dti.inputs.fdgpet_regions.resolution_network_file = res_ntwk_file
 
 workflow = pe.Workflow(name='ex_precoth')
 workflow.base_dir = output_dir
@@ -75,4 +77,5 @@ workflow.connect([(dti, datasink, [("outputnode.fa", "@subject_id.fa"),
 
 workflow.connect([(infosource, datasink,[('subject_id','@subject_id')])])
 workflow.write_graph()
-workflow.run()
+#workflow.run()
+workflow.run(plugin='MultiProc', plugin_args={'n_procs' : 8})
