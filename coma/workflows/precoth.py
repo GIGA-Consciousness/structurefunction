@@ -80,7 +80,7 @@ def extract_PreCoTh(in_file):
     return out_file
 
 
-def create_precoth_pipeline(name="precoth", tractography_type='probabilistic'):
+def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', reg_pet_T1=True):
     inputnode = pe.Node(
         interface=util.IdentityInterface(fields=["subjects_dir",
                                                  "subject_id",
@@ -99,7 +99,6 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic'):
     output_names=["tensor", "FA", "MD", "evecs", "evals", "rgb_fa", "norm", "mode", "binary_mask", "b0_masked"], function=nonlinfit_fn)
 
     nonlinfit_node = pe.Node(interface=nonlinfit_interface, name="nonlinfit_node")
-
 
     coregister = pe.Node(interface=fsl.FLIRT(dof=12), name = 'coregister')
     coregister.inputs.cost = ('normmi')
@@ -223,10 +222,14 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic'):
         interface=fs.MRIConvert(), name='mri_convert_Brain')
     mri_convert_Brain.inputs.out_type = 'niigz'
 
+    if reg_pet_T1:
+        reg_pet_T1 = pe.Node(interface=fsl.FLIRT(dof=6), name = 'reg_pet_T1')
+        reg_pet_T1.inputs.cost = ('corratio')
+    
+    reslice_fdgpet = mri_convert_Brain.clone("reslice_fdgpet")
+
     mri_convert_WhiteMatter = mri_convert_Brain.clone("mri_convert_WhiteMatter")
     mri_convert_ROIs = mri_convert_Brain.clone("mri_convert_ROIs")
-
-    reslice_fdgpet = mri_convert_Brain.clone("reslice_fdgpet")
 
     workflow = pe.Workflow(name=name)
     workflow.base_output_dir = name
@@ -250,17 +253,29 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic'):
     workflow.connect(inputnode, 'subject_id', nonlinfit_node, 'base_name')
     workflow.connect(inputnode, 'bvecs', nonlinfit_node, 'bvecs')
     workflow.connect(inputnode, 'bvals', nonlinfit_node, 'bvals')
-    workflow.connect([(inputnode, reslice_fdgpet, [("fdgpet", "in_file")])])
+
     workflow.connect([(inputnode, compute_cmr_glc, [("dose", "dose")])])
     workflow.connect([(inputnode, compute_cmr_glc, [("weight", "weight")])])
     workflow.connect([(inputnode, compute_cmr_glc, [("delay", "delay")])])
     workflow.connect([(inputnode, compute_cmr_glc, [("glycemie", "glycemie")])])
     workflow.connect([(inputnode, compute_cmr_glc, [("scan_time", "scan_time")])])
 
-    workflow.connect(
-        [(mri_convert_ROIs, reslice_fdgpet, [("out_file", "reslice_like")])])
-    workflow.connect(
-        [(reslice_fdgpet, compute_cmr_glc, [("out_file", "in_file")])])
+    if reg_pet_T1:
+        workflow.connect([(inputnode, reg_pet_T1, [("fdgpet", "in_file")])])
+        workflow.connect(
+            [(mri_convert_Brain, reg_pet_T1, [("out_file", "reference")])])
+        workflow.connect(
+            [(reg_pet_T1, reslice_fdgpet, [("out_file", "in_file")])])
+        workflow.connect(
+            [(mri_convert_ROIs, reslice_fdgpet, [("out_file", "reslice_like")])])
+        workflow.connect(
+            [(reslice_fdgpet, compute_cmr_glc, [("out_file", "in_file")])])
+    else:
+        workflow.connect([(inputnode, reslice_fdgpet, [("fdgpet", "in_file")])])
+        workflow.connect(
+            [(mri_convert_ROIs, reslice_fdgpet, [("out_file", "reslice_like")])])
+        workflow.connect(
+            [(reslice_fdgpet, compute_cmr_glc, [("out_file", "in_file")])])
     workflow.connect(
         [(compute_cmr_glc, fdgpet_regions, [("out_file", "in_files")])])
     workflow.connect(

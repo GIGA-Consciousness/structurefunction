@@ -49,7 +49,7 @@ datasink = pe.Node(interface=nio.DataSink(), name="datasink")
 datasink.inputs.base_directory = output_dir
 datasink.overwrite = True
 
-dti = create_precoth_pipeline("coma_precoth")
+dti = create_precoth_pipeline("coma_precoth", reg_pet_T1=True)
 
 lmax = 6
 dti.inputs.csdeconv.maximum_harmonic_order = lmax
