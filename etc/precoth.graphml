@@ -17,56 +17,56 @@
       <data key="d5">left</data>
       <data key="d6">http://connectome.ch/wiki/TH_(Homo_sapiens)</data>
       <data key="d7">(-15.221392631530762, 7.1309566497802734, 0.0)</data>
-    </node>
-    <node id="2">
-      <data key="d0">160,140,180</data>
-      <data key="d1">cortical</data>
-      <data key="d2">2</data>
-      <data key="d3">Left-Precuneus</data>
-      <data key="d4">pcunRes83_LH</data>
-      <data key="d5">left</data>
-      <data key="d6">http://www.connectome.ch/wiki/pcunRes83_LH_(Homo sapiens)</data>
-      <data key="d7">(-125.52231597900391, -113.10212707519531, 0.0)</data>
-    </node>
-    <node id="3">
-      <data key="d0">160,140,180</data>
-      <data key="d1">cortical</data>
-      <data key="d2">3</data>
-      <data key="d3">Left-Cerebral-Cortex</data>
-      <data key="d4">ctx-left_LH</data>
-      <data key="d5">left</data>
-      <data key="d6"></data>
-      <data key="d7">(205, 62, 78)</data>
-    </node>
-    <node id="4">
-      <data key="d0">100,172,222</data>
-      <data key="d1">subcortical</data>
-      <data key="d2">4</data>
-      <data key="d3">Right-Thalamus-Proper</data>
-      <data key="d4">TH_RH</data>
-      <data key="d5">right</data>
-      <data key="d6">http://www.connectome.ch/wiki/TH_(Homo sapiens)</data>
-      <data key="d7">(16.194923400878906, 7.176084041595459, 0.0)</data>
-    </node>
-    <node id="5">
-      <data key="d0">160,140,180</data>
-      <data key="d1">cortical</data>
-      <data key="d2">5</data>
-      <data key="d3">Right-Precuneus</data>
-      <data key="d4">pcunRes83_RH</data>
-      <data key="d5">right</data>
-      <data key="d6">http://www.connectome.ch/wiki/pcunRes83_RH_(Homo sapiens)</data>
-      <data key="d7">(140.71604919433594, -108.33354949951172, 0.0)</data>
-    </node>
-    <node id="6">
-      <data key="d0">160,140,180</data>
-      <data key="d1">cortical</data>
-      <data key="d2">6</data>
-      <data key="d3">Right-Cerebral-Cortex</data>
-      <data key="d4">ctx-right_RH</data>
-      <data key="d5">right</data>
-      <data key="d6"></data>
-      <data key="d7">(205, 62, 78)</data>
-    </node>
+      </node>
+      <node id="2">
+        <data key="d0">100,172,222</data>
+        <data key="d1">subcortical</data>
+        <data key="d2">2</data>
+        <data key="d3">Right-Thalamus-Proper</data>
+        <data key="d4">TH_RH</data>
+        <data key="d5">right</data>
+        <data key="d6">http://www.connectome.ch/wiki/TH_(Homo sapiens)</data>
+        <data key="d7">(16.194923400878906, 7.176084041595459, 0.0)</data>
+      </node>
+      <node id="3">
+        <data key="d0">160,140,180</data>
+        <data key="d1">cortical</data>
+        <data key="d2">3</data>
+        <data key="d3">Left-Cerebral-Cortex</data>
+        <data key="d4">ctx-left_LH</data>
+        <data key="d5">left</data>
+        <data key="d6"></data>
+        <data key="d7">(205, 62, 78)</data>
+      </node>
+      <node id="4">
+        <data key="d0">160,140,180</data>
+        <data key="d1">cortical</data>
+        <data key="d2">4</data>
+        <data key="d3">Right-Cerebral-Cortex</data>
+        <data key="d4">ctx-right_RH</data>
+        <data key="d5">right</data>
+        <data key="d6"></data>
+        <data key="d7">(205, 62, 78)</data>
+      </node>
+      <node id="5">
+        <data key="d0">160,140,180</data>
+        <data key="d1">cortical</data>
+        <data key="d2">5</data>
+        <data key="d3">Left-Precuneus</data>
+        <data key="d4">pcunRes83_LH</data>
+        <data key="d5">left</data>
+        <data key="d6">http://www.connectome.ch/wiki/pcunRes83_LH_(Homo sapiens)</data>
+        <data key="d7">(-125.52231597900391, -113.10212707519531, 0.0)</data>
+      </node>
+      <node id="6">
+        <data key="d0">160,140,180</data>
+        <data key="d1">cortical</data>
+        <data key="d2">6</data>
+        <data key="d3">Right-Precuneus</data>
+        <data key="d4">pcunRes83_RH</data>
+        <data key="d5">right</data>
+        <data key="d6">http://www.connectome.ch/wiki/pcunRes83_RH_(Homo sapiens)</data>
+        <data key="d7">(140.71604919433594, -108.33354949951172, 0.0)</data>
+      </node>
   </graph>
 </graphml>

@@ -2,7 +2,6 @@ from nipype.interfaces.base import (BaseInterface, traits,
                                     File, TraitedSpec, InputMultiPath,
                                     OutputMultiPath, isdefined)
 from nipype.utils.filemanip import split_filename
-import os
 import os.path as op
 import numpy as np
 import nibabel as nb
@@ -128,7 +127,8 @@ class RegionalValues(BaseInterface):
                     iflogger.info(key)
                     iflogger.info(np.shape(per_file_stats[key]))
                     try:
-                        newntwk = add_node_data(per_file_stats[key], ntwkname)
+                        nwtk = nx.read_gpickle(ntwkname)
+                        newntwk = add_node_data(per_file_stats[key], nwtk)
                     except:
                         iflogger.error(key)
                         iflogger.error(np.shape(per_file_stats[key]))

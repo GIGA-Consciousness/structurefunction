@@ -12,6 +12,64 @@ fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
 
 from coma.interfaces import RegionalValues, nonlinfit_fn, CMR_glucose
 
+def summarize_precoth(dwi_network_file, fdg_stats_file, subject_id):
+    import ipdb
+    import os.path as op
+    import scipy.io as sio
+    import networkx as nx
+
+    fdg = sio.loadmat(fdg_stats_file)
+    dwi_ntwk = nx.read_gpickle(dwi_network_file)
+
+    # Thal L-1 R-2
+    # Cortex 3 and 4
+    # Prec L-5 R-6
+    titles = ["subjid"]
+    fdg_avg = ["LTh_CMR_avg","RTh_CMR_avg","LCo_CMR_avg","RCo_CMR_avg","LPre_CMR_avg","RPre_CMR_avg"]
+    f_avg = [fdg["func_mean"][0][0],fdg["func_mean"][1][0],fdg["func_mean"][2][0],
+               fdg["func_mean"][3][0],fdg["func_mean"][4][0],fdg["func_mean"][5][0]]
+
+    fdg_max = ["LTh_CMR_max","RTh_CMR_max","LCo_CMR_max","RCo_CMR_max","LPre_CMR_max","RPre_CMR_max"]
+    f_max = [fdg["func_max"][0][0],fdg["func_max"][1][0],fdg["func_max"][2][0],
+               fdg["func_max"][3][0],fdg["func_max"][4][0],fdg["func_max"][5][0]]
+
+    fdg_min = ["LTh_CMR_min","RTh_CMR_min","LCo_CMR_min","RCo_CMR_min","LPre_CMR_min","RPre_CMR_min"]
+    f_min = [fdg["func_min"][0][0],fdg["func_min"][1][0],fdg["func_min"][2][0],
+               fdg["func_min"][3][0],fdg["func_min"][4][0],fdg["func_min"][5][0]]
+
+    fdg_std = ["LTh_CMR_std","RTh_CMR_std","LCo_CMR_std","RCo_CMR_std","LPre_CMR_std","RPre_CMR_std"]
+    f_std = [fdg["func_stdev"][0][0],fdg["func_stdev"][1][0],fdg["func_stdev"][2][0],
+               fdg["func_stdev"][3][0],fdg["func_stdev"][4][0],fdg["func_stdev"][5][0]]
+
+    fdg_titles = fdg_avg + fdg_max + fdg_min + fdg_std
+
+    dwi = nx.to_numpy_matrix(dwi_ntwk, weight="number_of_fibers")
+
+    l_thal = ["LTh_RTh","LTh_LCo","LTh_RCo","LTh_LPre","LTh_RPre"]
+    l_th   = [dwi[0,1], dwi[0,2], dwi[0,3], dwi[0,4], dwi[0,5]]
+    r_thal = ["RTh_LCo","RTh_RCo","RTh_LPre","RTh_RPre"]
+    r_th   = [dwi[1,2], dwi[1,3], dwi[1,4], dwi[1,5]]
+    l_co   = ["LCo_RCo","LCo_LPre","LCo_RPre"]
+    l_cor  = [dwi[2,3], dwi[2,4], dwi[2,5]]
+    r_co   = ["RCo_LPre","RCo_RPre"]
+    r_cor  = [dwi[3,4], dwi[3,5]]
+    l_pre  = ["LPre_RPre"]
+    l_prec = [dwi[4,5]]
+    conn_titles = l_thal + r_thal + l_co + r_co + l_pre
+
+    all_titles = titles + fdg_titles + conn_titles
+    all_data = f_avg + f_max + f_min + f_std
+    all_data = all_data + l_th + r_th + l_cor + r_cor + l_prec
+
+    out_file = op.abspath(subject_id + "_precoth.csv")
+    f = open(out_file, "w")
+    title_str = ",".join(all_titles) + "\n"
+    f.write(title_str)
+    data_str = subject_id + "," + ",".join(format(x, "10.5f") for x in all_data) + "\n"
+    f.write(data_str)
+    f.close()
+    return out_file
+
 
 def extract_PreCoTh(in_file):
     from nipype.utils.filemanip import split_filename
@@ -208,9 +266,14 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     extract_PreCoTh_interface = util.Function(input_names=["in_file"],
                                          output_names=["out_file"],
                                          function=extract_PreCoTh)
-
     thalamus2precuneus2cortex_ROIs = pe.Node(
         interface=extract_PreCoTh_interface, name='thalamus2precuneus2cortex_ROIs')
+
+    write_precoth_data_interface = util.Function(input_names=["dwi_network_file", "fdg_stats_file", "subject_id"],
+                                         output_names=["out_file"],
+                                         function=summarize_precoth)
+    write_csv_data = pe.Node(
+        interface=write_precoth_data_interface, name='write_csv_data')
 
     thalamus2precuneus2cortex = pe.Node(
         interface=cmtk.CreateMatrix(), name="thalamus2precuneus2cortex")
@@ -346,7 +409,15 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     workflow.connect(
         [(thalamus2precuneus2cortex_ROIs, thalamus2precuneus2cortex, [("out_file", "roi_file")])])
 
-    output_fields = ["fa", "rgb_fa", "md", "csdeconv", "tracts_tck", "rois", "t1_brain", "wmmask_dtispace", "fa_t1space"]
+    workflow.connect(
+        [(inputnode, write_csv_data, [("subject_id", "subject_id")])])
+    workflow.connect(
+        [(fdgpet_regions, write_csv_data, [("stats_file", "fdg_stats_file")])])
+    workflow.connect(
+        [(thalamus2precuneus2cortex, write_csv_data, [("matrix_file", "dwi_network_file")])])
+
+    output_fields = ["fa", "rgb_fa", "md", "csdeconv", "tracts_tck", "rois",
+        "t1_brain", "wmmask_dtispace", "fa_t1space", "summary"]
 
     outputnode = pe.Node(
         interface=util.IdentityInterface(fields=output_fields),
@@ -362,7 +433,9 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
          (mri_convert_Brain, outputnode, [("out_file", "t1_brain")]),
          (thalamus2precuneus2cortex_ROIs, outputnode, [("out_file", "rois")]),
          (nonlinfit_node, outputnode, [("rgb_fa", "rgb_fa")]),
-         (nonlinfit_node, outputnode, [("MD", "md")])])
+         (nonlinfit_node, outputnode, [("MD", "md")]),
+         (write_csv_data, outputnode, [("out_file", "summary")]),
+         ])
 
     return workflow
 

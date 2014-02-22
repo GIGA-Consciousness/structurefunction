@@ -58,7 +58,7 @@ dti.inputs.fsl2mrtrix.invert_x = True
 dti.inputs.fsl2mrtrix.invert_y = False
 dti.inputs.inputnode.subjects_dir = subjects_dir
 dti.inputs.thalamus2precuneus2cortex.resolution_network_file = res_ntwk_file
-#dti.inputs.fdgpet_regions.resolution_network_file = res_ntwk_file
+dti.inputs.fdgpet_regions.resolution_network_file = res_ntwk_file
 
 workflow = pe.Workflow(name='ex_precoth')
 workflow.base_dir = output_dir
