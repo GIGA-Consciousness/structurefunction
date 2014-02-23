@@ -10,7 +10,7 @@ def nonlinfit_fn(dwi, bvecs, bvals, base_name):
     dwi_affine = dwi_img.get_affine()
     
     from dipy.segment.mask import median_otsu
-    b0_mask, mask = median_otsu(dwi_data, 4, 4)
+    b0_mask, mask = median_otsu(dwi_data, 2, 4)
     # Mask the data so that tensors are not fit for
     # unnecessary voxels
     mask_img = nb.Nifti1Image(mask.astype(np.float32), dwi_affine)

@@ -84,6 +84,9 @@ workflow.connect([(datasource, dti,[('bvals', 'inputnode.bvals')])])
 
 workflow.connect([(dti, datasink, [("outputnode.fa", "@subject_id.fa"),
                                           ("outputnode.md", "@subject_id.md"),
+                                          ("outputnode.summary", "@subject_id.summary"),
+                                          ("outputnode.rois", "@subject_id.rois"),
+                                          ("outputnode.rgb_fa", "@subject_id.rgb_fa"),
                                           ])])
 
 workflow.connect([(infosource, datasink,[('subject_id','@subject_id')])])

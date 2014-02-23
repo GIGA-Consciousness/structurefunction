@@ -6,14 +6,20 @@ import nipype.interfaces.freesurfer as fs
 import nipype.interfaces.mrtrix as mrtrix
 import nipype.interfaces.cmtk as cmtk
 from nipype.workflows.misc.utils import select_aparc
-import nipype.interfaces.ants as ants
 
 fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
 
 from coma.interfaces import RegionalValues, nonlinfit_fn, CMR_glucose
 
+def select_ribbon(list_of_files):
+    for idx, in_file in enumerate(list_of_files):
+        if in_file == 'ribbon.mgz':
+            idx = list_of_files.index(in_file)
+    return list_of_files[idx]
+
+
+
 def summarize_precoth(dwi_network_file, fdg_stats_file, subject_id):
-    import ipdb
     import os.path as op
     import scipy.io as sio
     import networkx as nx
@@ -165,54 +171,8 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     invertxfm.inputs.invert_xfm = True
 
     WM_to_FA = pe.Node(interface=fsl.ApplyXfm(), name = 'WM_to_FA')
-
-
-    # FA_to_T1 = pe.Node(interface=ants.Registration(), name="FA_to_T1")
-    # FA_to_T1.inputs.output_transform_prefix = "FA_to_T1_"
-
-    # FA_to_T1.inputs.transforms = ['Affine']#, 'SyN']
-    # FA_to_T1.inputs.transform_parameters = [(2.0,)]#, (0.25, 3.0, 0.0)]
-    # FA_to_T1.inputs.number_of_iterations = [[1500, 200]]#, [100, 50, 30]]
-    # FA_to_T1.inputs.dimension = 3
-    # FA_to_T1.inputs.write_composite_transform = True
-    # FA_to_T1.inputs.collapse_output_transforms = False
-    # FA_to_T1.inputs.metric = ['Mattes']#*2
-    # FA_to_T1.inputs.metric_weight = [1]#*2 # Default (value ignored currently by ANTs)
-    # FA_to_T1.inputs.radius_or_number_of_bins = [32]#*2
-    # FA_to_T1.inputs.sampling_strategy = ['Random']#, None]
-    # FA_to_T1.inputs.sampling_percentage = [0.05]#, None]
-    # FA_to_T1.inputs.convergence_threshold = [1.e-8]#, 1.e-9]
-    # FA_to_T1.inputs.convergence_window_size = [20]#*2
-    # FA_to_T1.inputs.smoothing_sigmas = [[1,0]]#, [2,1,0]]
-    # FA_to_T1.inputs.sigma_units = ['vox']# * 2
-    # FA_to_T1.inputs.shrink_factors = [[2,1]]#, [3,2,1]]
-    # FA_to_T1.inputs.use_estimate_learning_rate_once = [True]#, True]
-    # FA_to_T1.inputs.use_histogram_matching = [True]#, True] # This is the default
-    # FA_to_T1.inputs.output_warped_image = 'FA_T1space.nii.gz'
-    # #FA_to_T1.inputs.num_threads = 2
-
-    # # FA_to_T1.inputs.transforms = ['Affine', 'SyN']
-    # # FA_to_T1.inputs.transform_parameters = [(2.0,), (0.25, 3.0, 0.0)]
-    # # FA_to_T1.inputs.number_of_iterations = [[1500, 200], [100, 50, 30]]
-    # # FA_to_T1.inputs.dimension = 3
-    # # FA_to_T1.inputs.write_composite_transform = True
-    # # FA_to_T1.inputs.collapse_output_transforms = False
-    # # FA_to_T1.inputs.metric = ['Mattes']*2
-    # # FA_to_T1.inputs.metric_weight = [1]*2 # Default (value ignored currently by ANTs)
-    # # FA_to_T1.inputs.radius_or_number_of_bins = [32]*2
-    # # FA_to_T1.inputs.sampling_strategy = ['Random', None]
-    # # FA_to_T1.inputs.sampling_percentage = [0.05, None]
-    # # FA_to_T1.inputs.convergence_threshold = [1.e-8, 1.e-9]
-    # # FA_to_T1.inputs.convergence_window_size = [20]*2
-    # # FA_to_T1.inputs.smoothing_sigmas = [[1,0], [2,1,0]]
-    # # FA_to_T1.inputs.sigma_units = ['vox'] * 2
-    # # FA_to_T1.inputs.shrink_factors = [[2,1], [3,2,1]]
-    # # FA_to_T1.inputs.use_estimate_learning_rate_once = [True, True]
-    # # FA_to_T1.inputs.use_histogram_matching = [True, True] # This is the default
-    # # FA_to_T1.inputs.output_warped_image = 'FA_T1space.nii.gz'
-    # # FA_to_T1.inputs.num_threads = 2
-
-    #WM_to_FA = pe.Node(interface=ants.ApplyTransforms(), name="WM_to_FA")
+    WM_to_FA.inputs.interp = 'nearestneighbour'
+    TermMask_to_FA = WM_to_FA.clone("TermMask_to_FA")
 
     fsl2mrtrix = pe.Node(interface=mrtrix.FSL2MRTrix(), name='fsl2mrtrix')
     fsl2mrtrix.inputs.invert_y = True
@@ -227,6 +187,8 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     threshold_FA = pe.Node(interface=fsl.ImageMaths(), name='threshold_FA')
     threshold_FA.inputs.op_string = "-thr 0.8 -uthr 0.99"
 
+    make_termination_mask = pe.Node(interface=fsl.ImageMaths(), name='make_termination_mask')
+    make_termination_mask.inputs.op_string = "-bin"
 
     get_wm_mask = pe.Node(interface=fsl.ImageMaths(), name='get_wm_mask')
     get_wm_mask.inputs.op_string = "-thr 0.1"
@@ -292,6 +254,7 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     reslice_fdgpet = mri_convert_Brain.clone("reslice_fdgpet")
 
     mri_convert_WhiteMatter = mri_convert_Brain.clone("mri_convert_WhiteMatter")
+    mri_convert_Ribbon = mri_convert_Brain.clone("mri_convert_Ribbon")
     mri_convert_ROIs = mri_convert_Brain.clone("mri_convert_ROIs")
 
     workflow = pe.Workflow(name=name)
@@ -308,6 +271,10 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
         [(FreeSurferSource, mri_convert_Brain, [('brain', 'in_file')])])
     workflow.connect(
         [(FreeSurferSource, mri_convert_WhiteMatter, [('wm', 'in_file')])])
+    workflow.connect(
+        [(FreeSurferSource, mri_convert_Ribbon, [(('ribbon', select_ribbon), 'in_file')])])
+    workflow.connect(
+        [(mri_convert_Ribbon, make_termination_mask, [('out_file', 'in_file')])])
 
     workflow.connect([(inputnode, fsl2mrtrix, [("bvecs", "bvec_file"),
                                                ("bvals", "bval_file")])])
@@ -350,17 +317,22 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     #workflow.connect([(FA_to_T1, WM_to_FA,[('inverse_composite_transform','transforms')])])
 
     workflow.connect([(nonlinfit_node, coregister,[("FA","in_file")])])
-    workflow.connect([(mri_convert_Brain, coregister,[('out_file','reference')])])
+    workflow.connect([(mri_convert_WhiteMatter, coregister,[('out_file','reference')])])
     workflow.connect([(nonlinfit_node, tck2trk,[("FA","image_file")])])
     workflow.connect([(mri_convert_Brain, tck2trk,[("out_file","registration_image_file")])])
     workflow.connect([(coregister, tck2trk,[("out_matrix_file","matrix_file")])])
 
-    #workflow.connect([(coregister, invertxfm,[("out_matrix_file","in_file")])])
-    #workflow.connect([(invertxfm, WM_to_FA,[("out_file","in_matrix_file")])])
-    #workflow.connect([(mri_convert_WhiteMatter, WM_to_FA,[("out_file","in_file")])])
-    #workflow.connect([(nonlinfit_node, WM_to_FA,[("FA","reference")])])
+    workflow.connect([(coregister, invertxfm,[("out_matrix_file","in_file")])])
+    workflow.connect([(invertxfm, WM_to_FA,[("out_file","in_matrix_file")])])
+    workflow.connect([(mri_convert_WhiteMatter, WM_to_FA,[("out_file","in_file")])])
+    workflow.connect([(nonlinfit_node, WM_to_FA,[("FA","reference")])])
+    
+    workflow.connect([(invertxfm, TermMask_to_FA,[("out_file","in_matrix_file")])])
+    workflow.connect([(make_termination_mask, TermMask_to_FA,[("out_file","in_file")])])
+    workflow.connect([(nonlinfit_node, TermMask_to_FA,[("FA","reference")])])
 
-    workflow.connect([(nonlinfit_node, get_wm_mask, [("FA", "in_file")])])
+
+    #workflow.connect([(nonlinfit_node, get_wm_mask, [("FA", "in_file")])])
     #workflow.connect([(mri_convert_WhiteMatter, WM_to_FA,[('out_file','input_image')])])
     #workflow.connect([(nonlinfit_node, WM_to_FA,[('FA','reference_image')])])
 
@@ -384,14 +356,15 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
 
     workflow.connect([(inputnode, csdeconv, [("dwi", "in_file")])])
     workflow.connect(
-        [(get_wm_mask, csdeconv, [("out_file", "mask_image")])])
+        [(TermMask_to_FA, csdeconv, [("out_file", "mask_image")])])
     workflow.connect(
         [(estimateresponse, csdeconv, [("response", "response_file")])])
     workflow.connect(
         [(fsl2mrtrix, csdeconv, [("encoding_file", "encoding_file")])])
-
     workflow.connect(
-        [(get_wm_mask, CSDstreamtrack, [("out_file", "seed_file")])])
+        [(WM_to_FA, CSDstreamtrack, [("out_file", "seed_file")])])
+    workflow.connect(
+        [(TermMask_to_FA, CSDstreamtrack, [("out_file", "mask_file")])])
     workflow.connect(
         [(csdeconv, CSDstreamtrack, [("spherical_harmonics_image", "in_file")])])
 
@@ -442,29 +415,25 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
 
 def return_subject_data(subject_id, data_file):
     import csv
+    from nipype import logging
+    iflogger = logging.getLogger('interface')
+
     f = open(data_file, 'r')
     csv_line_by_line = csv.reader(f)
     found = False
     # Must be stored in this order!:
     # 'subject_id', 'dose', 'weight', 'delay', 'glycemie', 'scan_time']
     for line in csv_line_by_line:
-
         if line[0] == subject_id:
-            print 'Subject %s found' % subject_id
-            dose = float(line[1])
-            print 'Dose: %s' % dose
-            weight = float(line[2])
-            print 'Weight: %s' % weight
-            delay = float(line[3])
-            print 'Delay: %s' % delay
-            glycemie = float(line[4])
-            print 'Glycemie: %s' % glycemie
-            scan_time = float(line[5])
-            print 'Scan Time: %s' % scan_time
+            dose, weight, delay, glycemie, scan_time = [float(x) for x in line[1:]]
+            iflogger.info('Subject %s found' % subject_id)
+            iflogger.info('Dose: %s' % dose)
+            iflogger.info('Weight: %s' % weight)
+            iflogger.info('Delay: %s' % delay)
+            iflogger.info('Glycemie: %s' % glycemie)
+            iflogger.info('Scan Time: %s' % scan_time)
             found = True
             break
-
     if not found:
         raise Exception("Subject id %s was not in the data file!" % subject_id)
-
     return dose, weight, delay, glycemie, scan_time
