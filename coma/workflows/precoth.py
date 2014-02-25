@@ -12,9 +12,9 @@ fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
 from coma.interfaces import RegionalValues, nonlinfit_fn, CMR_glucose
 
 def select_ribbon(list_of_files):
-	from nipype.utils.filemanip import split_filename
+    from nipype.utils.filemanip import split_filename
     for idx, in_file in enumerate(list_of_files):
-    	_, name, ext = split_filename(in_file)
+        _, name, ext = split_filename(in_file)
         if name == 'ribbon':
             idx = list_of_files.index(in_file)
     return list_of_files[idx]
