@@ -13,8 +13,10 @@ from coma.interfaces import RegionalValues, nonlinfit_fn, CMR_glucose
 
 
 def select_ribbon(list_of_files):
-    for idx, in_file in enumerate(list_of_files):
-        if in_file == 'ribbon.mgz':
+    from nipype.utils.filemanip import split_filename
+    for in_file in list_of_files:
+        _, name, ext = split_filename(in_file)
+        if name == 'ribbon':
             idx = list_of_files.index(in_file)
     return list_of_files[idx]
 
@@ -75,6 +77,36 @@ def summarize_precoth(dwi_network_file, fdg_stats_file, subject_id):
     data_str = subject_id + "," + ",".join(format(x, "10.5f") for x in all_data) + "\n"
     f.write(data_str)
     f.close()
+    return out_file
+
+
+def wm_labels_only(in_file):
+    from nipype.utils.filemanip import split_filename
+    import nibabel as nb
+    import numpy as np
+    import os.path as op
+    in_image = nb.load(in_file)
+    in_header = in_image.get_header()
+    in_data = in_image.get_data()
+
+    out_data = np.zeros(np.shape(in_data))
+    out_data[np.where(in_data==2)] = 1
+    out_data[np.where(in_data==41)] = 1
+    out_data[np.where(in_data==82)] = 1
+    out_data[np.where(in_data==251)] = 1
+    out_data[np.where(in_data==252)] = 1
+    out_data[np.where(in_data==253)] = 1
+    out_data[np.where(in_data==254)] = 1
+    out_data[np.where(in_data==255)] = 1
+    out_data[np.where(in_data==49)] = 1
+    out_data[np.where(in_data==10)] = 1
+
+
+    _, name, _ = split_filename(in_file)
+    out_file = op.abspath(name) + "_wmmask.nii.gz"
+    out_image = nb.Nifti1Image(
+        data=out_data, header=in_header, affine=in_image.get_affine())
+    nb.save(out_image, out_file)
     return out_file
 
 
@@ -232,6 +264,13 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     thalamus2precuneus2cortex_ROIs = pe.Node(
         interface=extract_PreCoTh_interface, name='thalamus2precuneus2cortex_ROIs')
 
+
+    wm_mask_interface = util.Function(input_names=["in_file"],
+                                         output_names=["out_file"],
+                                         function=wm_labels_only)
+    make_wm_mask = pe.Node(
+        interface=wm_mask_interface, name='make_wm_mask')
+
     write_precoth_data_interface = util.Function(input_names=["dwi_network_file", "fdg_stats_file", "subject_id"],
                                          output_names=["out_file"],
                                          function=summarize_precoth)
@@ -254,7 +293,6 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     
     reslice_fdgpet = mri_convert_Brain.clone("reslice_fdgpet")
 
-    mri_convert_WhiteMatter = mri_convert_Brain.clone("mri_convert_WhiteMatter")
     mri_convert_Ribbon = mri_convert_Brain.clone("mri_convert_Ribbon")
     mri_convert_ROIs = mri_convert_Brain.clone("mri_convert_ROIs")
 
@@ -271,11 +309,13 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     workflow.connect(
         [(FreeSurferSource, mri_convert_Brain, [('brain', 'in_file')])])
     workflow.connect(
-        [(FreeSurferSource, mri_convert_WhiteMatter, [('wm', 'in_file')])])
-    workflow.connect(
         [(FreeSurferSource, mri_convert_Ribbon, [(('ribbon', select_ribbon), 'in_file')])])
     workflow.connect(
         [(mri_convert_Ribbon, make_termination_mask, [('out_file', 'in_file')])])
+    workflow.connect(
+        [(mri_convert_ROIs, make_wm_mask, [('out_file', 'in_file')])])
+
+
 
     workflow.connect([(inputnode, fsl2mrtrix, [("bvecs", "bvec_file"),
                                                ("bvals", "bval_file")])])
@@ -318,24 +358,19 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     #workflow.connect([(FA_to_T1, WM_to_FA,[('inverse_composite_transform','transforms')])])
 
     workflow.connect([(nonlinfit_node, coregister,[("FA","in_file")])])
-    workflow.connect([(mri_convert_WhiteMatter, coregister,[('out_file','reference')])])
+    workflow.connect([(make_wm_mask, coregister,[('out_file','reference')])])
     workflow.connect([(nonlinfit_node, tck2trk,[("FA","image_file")])])
     workflow.connect([(mri_convert_Brain, tck2trk,[("out_file","registration_image_file")])])
     workflow.connect([(coregister, tck2trk,[("out_matrix_file","matrix_file")])])
 
     workflow.connect([(coregister, invertxfm,[("out_matrix_file","in_file")])])
     workflow.connect([(invertxfm, WM_to_FA,[("out_file","in_matrix_file")])])
-    workflow.connect([(mri_convert_WhiteMatter, WM_to_FA,[("out_file","in_file")])])
+    workflow.connect([(make_wm_mask, WM_to_FA,[("out_file","in_file")])])
     workflow.connect([(nonlinfit_node, WM_to_FA,[("FA","reference")])])
     
     workflow.connect([(invertxfm, TermMask_to_FA,[("out_file","in_matrix_file")])])
     workflow.connect([(make_termination_mask, TermMask_to_FA,[("out_file","in_file")])])
     workflow.connect([(nonlinfit_node, TermMask_to_FA,[("FA","reference")])])
-
-
-    #workflow.connect([(nonlinfit_node, get_wm_mask, [("FA", "in_file")])])
-    #workflow.connect([(mri_convert_WhiteMatter, WM_to_FA,[('out_file','input_image')])])
-    #workflow.connect([(nonlinfit_node, WM_to_FA,[('FA','reference_image')])])
 
     workflow.connect([(nonlinfit_node, median3d, [("binary_mask", "in_file")])])
     workflow.connect(
