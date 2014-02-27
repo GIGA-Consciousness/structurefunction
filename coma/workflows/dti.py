@@ -14,6 +14,44 @@ from nipype.workflows.dmri.connectivity.nx import create_networkx_pipeline, crea
 from nipype.workflows.misc.utils import select_aparc_annot
 
 
+def bundle_tracks(in_file):
+    import os.path as op
+    import numpy as np
+    from nibabel import trackvis as tv
+    from dipy.segment.quickbundles import QuickBundles
+    streams, hdr = tv.read(in_file)
+    streamlines = [i[0] for i in streams]
+    qb = QuickBundles(streamlines, dist_thr=40., pts = 18)
+    clusters = qb.clustering
+    #scalars = [i[0] for i in streams]
+
+    out_files = []
+    name = "quickbundle_"
+    n_clusters = clusters.keys()
+    print("%d clusters found" % len(n_clusters))
+
+    new_hdr = tv.empty_header()
+    new_hdr['n_scalars'] = 1
+    all_clust_list = []
+
+    for cluster in clusters:
+        print("Writing cluster %d" % cluster)
+        cluster_trk = op.abspath(name + str(cluster) + ".trk")
+        out_files.append(cluster_trk)
+        clust_idxs = clusters[cluster]['indices']
+        new_streams =  [ streamlines[i] for i in clust_idxs ]
+        for_save = [(sl, None, None) for sl in new_streams]
+        tv.write(cluster_trk, for_save, hdr)
+        
+
+    #print("Writing single track file with all clusters")
+    #all_cluster_trk = op.abspath(name + ".trk")
+    #out_files.append(all_cluster_trk)
+    #tv.write(all_cluster_trk, all_clust_list)
+
+    return out_files
+
+
 def create_connectivity_pipeline(name="connectivity", parcellation_name='scale500'):
     inputnode_within = pe.Node(util.IdentityInterface(fields=["subject_id",
                                                               "dwi",

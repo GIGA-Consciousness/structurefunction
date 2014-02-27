@@ -11,6 +11,7 @@ fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
 
 from coma.interfaces import RegionalValues, nonlinfit_fn, CMR_glucose
 
+
 def select_ribbon(list_of_files):
     for idx, in_file in enumerate(list_of_files):
         if in_file == 'ribbon.mgz':
@@ -221,7 +222,7 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
             interface=mrtrix.SphericallyDeconvolutedStreamlineTrack(),
             name='CSDstreamtrack')
 
-    CSDstreamtrack.inputs.desired_number_of_tracks = 30000
+    CSDstreamtrack.inputs.desired_number_of_tracks = 10000
 
     tck2trk = pe.Node(interface=mrtrix.MRTrix2TrackVis(), name='tck2trk')
 
@@ -390,7 +391,7 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
         [(thalamus2precuneus2cortex, write_csv_data, [("matrix_file", "dwi_network_file")])])
 
     output_fields = ["fa", "rgb_fa", "md", "csdeconv", "tracts_tck", "rois",
-        "t1_brain", "wmmask_dtispace", "fa_t1space", "summary"]
+        "t1_brain", "wmmask_dtispace", "fa_t1space", "summary", "filtered_tractographies"]
 
     outputnode = pe.Node(
         interface=util.IdentityInterface(fields=output_fields),
@@ -405,6 +406,7 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
          #(WM_to_FA, outputnode, [("out_file", "wmmask_dtispace")]),
          (mri_convert_Brain, outputnode, [("out_file", "t1_brain")]),
          (thalamus2precuneus2cortex_ROIs, outputnode, [("out_file", "rois")]),
+         (thalamus2precuneus2cortex, outputnode, [("filtered_tractographies", "filtered_tractographies")]),
          (nonlinfit_node, outputnode, [("rgb_fa", "rgb_fa")]),
          (nonlinfit_node, outputnode, [("MD", "md")]),
          (write_csv_data, outputnode, [("out_file", "summary")]),
