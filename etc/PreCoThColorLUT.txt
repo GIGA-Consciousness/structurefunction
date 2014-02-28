@@ -1,0 +1,11 @@
+#$Id: Precuneus_Cortex_Thalamus_LUT.txt
+
+#No. Label Name:                            R   G   B   A
+
+0    Unknown                                 0   0   0   0
+1    Left-Thalamus-Proper                    51  204 255 0
+2    Right-Thalamus-Proper                   0   61  245 0
+3    Left-Cerebral-Cortex                    102 255 51  0
+4    Right-Cerebral-Cortex                   204 255 51  0
+5    Left-Precuneus                          255 51  102 0
+6    Right-Precuneus                         255 102 51  0
