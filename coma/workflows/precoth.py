@@ -76,6 +76,7 @@ def summarize_precoth(dwi_network_file, fdg_stats_file, subject_id):
     f = open(out_file, "w")
     title_str = ",".join(all_titles) + "\n"
     f.write(title_str)
+    all_data = map(float ,all_data)
     data_str = subject_id + "," + ",".join(format(x, "10.5f") for x in all_data) + "\n"
     f.write(data_str)
     f.close()
