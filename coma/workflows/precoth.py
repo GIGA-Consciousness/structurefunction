@@ -1,3 +1,5 @@
+import os
+import os.path as op
 import nipype.interfaces.io as nio           # Data i/o
 import nipype.interfaces.utility as util     # utility
 import nipype.pipeline.engine as pe          # pypeline engine
@@ -207,6 +209,18 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     WM_to_FA.inputs.interp = 'nearestneighbour'
     TermMask_to_FA = WM_to_FA.clone("TermMask_to_FA")
 
+    mni_for_reg = op.join(os.environ["FSL_DIR"],"data","standard","MNI152_T1_1mm.nii.gz")
+    reorientBrain = pe.Node(interface=fsl.FLIRT(dof=6), name = 'reorientBrain')
+    reorientBrain.inputs.reference = mni_for_reg
+    #reorientBrain.inputs.no_resample = True
+    reorientROIs = pe.Node(interface=fsl.ApplyXfm(), name = 'reorientROIs')
+    reorientROIs.inputs.interp = "nearestneighbour"
+    reorientROIs.inputs.reference = mni_for_reg
+    reorientRibbon = reorientROIs.clone("reorientRibbon")
+    reorientRibbon.inputs.interp = "nearestneighbour"
+    reorientT1 = reorientROIs.clone("reorientT1")
+    reorientT1.inputs.interp = "spline"
+
     fsl2mrtrix = pe.Node(interface=mrtrix.FSL2MRTrix(), name='fsl2mrtrix')
     fsl2mrtrix.inputs.invert_y = True
 
@@ -295,6 +309,7 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
 
     mri_convert_Ribbon = mri_convert_Brain.clone("mri_convert_Ribbon")
     mri_convert_ROIs = mri_convert_Brain.clone("mri_convert_ROIs")
+    mri_convert_T1 = mri_convert_Brain.clone("mri_convert_T1")
 
     workflow = pe.Workflow(name=name)
     workflow.base_output_dir = name
@@ -303,17 +318,36 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
         [(inputnode, FreeSurferSource, [("subjects_dir", "subjects_dir")])])
     workflow.connect(
         [(inputnode, FreeSurferSource, [("subject_id", "subject_id")])])
+
     workflow.connect(
-        [(FreeSurferSource, mri_convert_ROIs, [(('aparc_aseg', select_aparc), 'in_file')])])
+        [(FreeSurferSource, mri_convert_T1, [('T1', 'in_file')])])
+    workflow.connect(
+        [(mri_convert_T1, reorientT1, [('out_file', 'in_file')])])
 
     workflow.connect(
         [(FreeSurferSource, mri_convert_Brain, [('brain', 'in_file')])])
     workflow.connect(
+        [(mri_convert_Brain, reorientBrain, [('out_file', 'in_file')])])
+    workflow.connect(
+        [(reorientBrain, reorientROIs, [('out_matrix_file', 'in_matrix_file')])])
+    workflow.connect(
+        [(reorientBrain, reorientRibbon, [('out_matrix_file', 'in_matrix_file')])])
+    workflow.connect(
+        [(reorientBrain, reorientT1, [('out_matrix_file', 'in_matrix_file')])])
+
+    workflow.connect(
+        [(FreeSurferSource, mri_convert_ROIs, [(('aparc_aseg', select_aparc), 'in_file')])])
+    workflow.connect(
+        [(mri_convert_ROIs, reorientROIs, [('out_file', 'in_file')])])
+    workflow.connect(
+        [(reorientROIs, make_wm_mask, [('out_file', 'in_file')])])
+
+    workflow.connect(
         [(FreeSurferSource, mri_convert_Ribbon, [(('ribbon', select_ribbon), 'in_file')])])
     workflow.connect(
-        [(mri_convert_Ribbon, make_termination_mask, [('out_file', 'in_file')])])
+        [(mri_convert_Ribbon, reorientRibbon, [('out_file', 'in_file')])])
     workflow.connect(
-        [(mri_convert_ROIs, make_wm_mask, [('out_file', 'in_file')])])
+        [(reorientRibbon, make_termination_mask, [('out_file', 'in_file')])])
 
 
 
@@ -334,17 +368,17 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     if reg_pet_T1:
         workflow.connect([(inputnode, reg_pet_T1, [("fdgpet", "in_file")])])
         workflow.connect(
-            [(mri_convert_Brain, reg_pet_T1, [("out_file", "reference")])])
+            [(reorientBrain, reg_pet_T1, [("out_file", "reference")])])
         workflow.connect(
             [(reg_pet_T1, reslice_fdgpet, [("out_file", "in_file")])])
         workflow.connect(
-            [(mri_convert_ROIs, reslice_fdgpet, [("out_file", "reslice_like")])])
+            [(reorientROIs, reslice_fdgpet, [("out_file", "reslice_like")])])
         workflow.connect(
             [(reslice_fdgpet, compute_cmr_glc, [("out_file", "in_file")])])
     else:
         workflow.connect([(inputnode, reslice_fdgpet, [("fdgpet", "in_file")])])
         workflow.connect(
-            [(mri_convert_ROIs, reslice_fdgpet, [("out_file", "reslice_like")])])
+            [(reorientROIs, reslice_fdgpet, [("out_file", "reslice_like")])])
         workflow.connect(
             [(reslice_fdgpet, compute_cmr_glc, [("out_file", "in_file")])])
     workflow.connect(
@@ -352,15 +386,10 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     workflow.connect(
         [(thalamus2precuneus2cortex_ROIs, fdgpet_regions, [("out_file", "segmentation_file")])])
 
-
-    #workflow.connect([(nonlinfit_node, FA_to_T1,[('FA','moving_image')])])
-    #workflow.connect([(mri_convert_Brain, FA_to_T1,[('out_file','fixed_image')])])
-    #workflow.connect([(FA_to_T1, WM_to_FA,[('inverse_composite_transform','transforms')])])
-
     workflow.connect([(nonlinfit_node, coregister,[("FA","in_file")])])
     workflow.connect([(make_wm_mask, coregister,[('out_file','reference')])])
     workflow.connect([(nonlinfit_node, tck2trk,[("FA","image_file")])])
-    workflow.connect([(mri_convert_Brain, tck2trk,[("out_file","registration_image_file")])])
+    workflow.connect([(reorientBrain, tck2trk,[("out_file","registration_image_file")])])
     workflow.connect([(coregister, tck2trk,[("out_matrix_file","matrix_file")])])
 
     workflow.connect([(coregister, invertxfm,[("out_matrix_file","in_file")])])
@@ -414,9 +443,11 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
         [(inputnode, thalamus2precuneus2cortex, [("subject_id", "out_matrix_mat_file")])])
 
     workflow.connect(
-        [(mri_convert_ROIs, thalamus2precuneus2cortex_ROIs, [("out_file", "in_file")])])
+        [(reorientROIs, thalamus2precuneus2cortex_ROIs, [("out_file", "in_file")])])
     workflow.connect(
         [(thalamus2precuneus2cortex_ROIs, thalamus2precuneus2cortex, [("out_file", "roi_file")])])
+    workflow.connect(
+        [(thalamus2precuneus2cortex, fdgpet_regions, [("matrix_file", "resolution_network_file")])])
 
     workflow.connect(
         [(inputnode, write_csv_data, [("subject_id", "subject_id")])])
@@ -425,8 +456,9 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     workflow.connect(
         [(thalamus2precuneus2cortex, write_csv_data, [("matrix_file", "dwi_network_file")])])
 
-    output_fields = ["fa", "rgb_fa", "md", "csdeconv", "tracts_tck", "rois",
-        "t1_brain", "wmmask_dtispace", "fa_t1space", "summary", "filtered_tractographies"]
+    output_fields = ["fa", "rgb_fa", "md", "csdeconv", "tracts_tck", "rois", "t1",
+        "t1_brain", "wmmask_dtispace", "fa_t1space", "summary", "filtered_tractographies",
+        "matrix_file", "connectome", "CMR_nodes"]
 
     outputnode = pe.Node(
         interface=util.IdentityInterface(fields=output_fields),
@@ -438,10 +470,12 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
           [("spherical_harmonics_image", "csdeconv")]),
          (nonlinfit_node, outputnode, [("FA", "fa")]),
          (coregister, outputnode, [("out_file", "fa_t1space")]),
-         #(WM_to_FA, outputnode, [("out_file", "wmmask_dtispace")]),
-         (mri_convert_Brain, outputnode, [("out_file", "t1_brain")]),
+         (reorientBrain, outputnode, [("out_file", "t1_brain")]),
+         (reorientT1, outputnode, [("out_file", "t1")]),
          (thalamus2precuneus2cortex_ROIs, outputnode, [("out_file", "rois")]),
          (thalamus2precuneus2cortex, outputnode, [("filtered_tractographies", "filtered_tractographies")]),
+         (thalamus2precuneus2cortex, outputnode, [("matrix_file", "connectome")]),
+         (fdgpet_regions, outputnode, [("networks", "CMR_nodes")]),
          (nonlinfit_node, outputnode, [("rgb_fa", "rgb_fa")]),
          (nonlinfit_node, outputnode, [("MD", "md")]),
          (write_csv_data, outputnode, [("out_file", "summary")]),

@@ -34,3 +34,11 @@ nosetests.xml
 .mr.developer.cfg
 .project
 .pydevproject
+
+# Added
+*.trk
+*.scene
+*.npz
+*.pklz
+examples/ComaSample
+examples/precoth

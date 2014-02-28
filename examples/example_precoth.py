@@ -58,7 +58,6 @@ dti.inputs.fsl2mrtrix.invert_x = True
 dti.inputs.fsl2mrtrix.invert_y = False
 dti.inputs.inputnode.subjects_dir = subjects_dir
 dti.inputs.thalamus2precuneus2cortex.resolution_network_file = res_ntwk_file
-dti.inputs.fdgpet_regions.resolution_network_file = res_ntwk_file
 
 workflow = pe.Workflow(name='ex_precoth')
 workflow.base_dir = output_dir
@@ -86,6 +85,9 @@ workflow.connect([(dti, datasink, [("outputnode.fa", "@subject_id.fa"),
                                           ("outputnode.md", "@subject_id.md"),
                                           ("outputnode.summary", "@subject_id.summary"),
                                           ("outputnode.rois", "@subject_id.rois"),
+                                          ("outputnode.filtered_tractographies", "@subject_id.tracks"),
+                                          ("outputnode.connectome", "@subject_id.connectome"),
+                                          ("outputnode.CMR_nodes", "@subject_id.CMR_nodes"),
                                           ("outputnode.rgb_fa", "@subject_id.rgb_fa"),
                                           ])])
 
