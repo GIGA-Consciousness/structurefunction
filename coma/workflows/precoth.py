@@ -213,14 +213,14 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     mni_for_reg = op.join(os.environ["FSL_DIR"],"data","standard","MNI152_T1_1mm.nii.gz")
     reorientBrain = pe.Node(interface=fsl.FLIRT(dof=6), name = 'reorientBrain')
     reorientBrain.inputs.reference = mni_for_reg
-    #reorientBrain.inputs.no_resample = True
+    #reorientBrain.inputs.searchr_y = [-45,45] # May be necessary for some subjects...
     reorientROIs = pe.Node(interface=fsl.ApplyXfm(), name = 'reorientROIs')
     reorientROIs.inputs.interp = "nearestneighbour"
     reorientROIs.inputs.reference = mni_for_reg
     reorientRibbon = reorientROIs.clone("reorientRibbon")
     reorientRibbon.inputs.interp = "nearestneighbour"
     reorientT1 = reorientROIs.clone("reorientT1")
-    reorientT1.inputs.interp = "spline"
+    reorientT1.inputs.interp = "trilinear"
 
     fsl2mrtrix = pe.Node(interface=mrtrix.FSL2MRTrix(), name='fsl2mrtrix')
     fsl2mrtrix.inputs.invert_y = True
@@ -231,7 +231,7 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     erode_mask_secondpass = pe.Node(interface=mrtrix.Erode(),
                                     name='erode_mask_secondpass')
     erode_mask_secondpass.inputs.out_filename = "b0_mask_median3D_erode_secondpass.nii.gz"
-
+ 
     threshold_FA = pe.Node(interface=fsl.ImageMaths(), name='threshold_FA')
     threshold_FA.inputs.op_string = "-thr 0.8 -uthr 0.99"
 
@@ -269,7 +269,7 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
             interface=mrtrix.SphericallyDeconvolutedStreamlineTrack(),
             name='CSDstreamtrack')
 
-    CSDstreamtrack.inputs.desired_number_of_tracks = 10000
+    #CSDstreamtrack.inputs.desired_number_of_tracks = 10000
 
     tck2trk = pe.Node(interface=mrtrix.MRTrix2TrackVis(), name='tck2trk')
 
