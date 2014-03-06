@@ -244,7 +244,7 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     erode_mask_secondpass = pe.Node(interface=mrtrix.Erode(),
                                     name='erode_mask_secondpass')
     erode_mask_secondpass.inputs.out_filename = "b0_mask_median3D_erode_secondpass.nii.gz"
-
+ 
     threshold_FA = pe.Node(interface=fsl.ImageMaths(), name='threshold_FA')
     threshold_FA.inputs.op_string = "-thr 0.8 -uthr 0.99"
 
@@ -282,7 +282,7 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
             interface=mrtrix.SphericallyDeconvolutedStreamlineTrack(),
             name='CSDstreamtrack')
 
-    CSDstreamtrack.inputs.desired_number_of_tracks = 10000
+    #CSDstreamtrack.inputs.desired_number_of_tracks = 10000
 
     tck2trk = pe.Node(interface=mrtrix.MRTrix2TrackVis(), name='tck2trk')
 
