@@ -57,7 +57,11 @@ def CMR_glucose(in_file, dose, weight, delay, glycemie, scan_time=15):
     inter = -cax2 * mecalc / denom
 
     rescaled = data*slope + inter
-    rescaled_image = nb.Nifti1Image(data=rescaled, affine=image.get_affine())
+    try:
+        rescaled_image = nb.Nifti1Image(data=rescaled, affine=image.get_affine())
+    except TypeError:
+        rescaled_image = nb.Nifti1Image(dataobj=rescaled, affine=image.get_affine())
+
     out_file = op.abspath(name + '_CMRGLC2.nii.gz')
 
     nb.save(rescaled_image, out_file)

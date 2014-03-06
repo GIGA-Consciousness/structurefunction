@@ -14,6 +14,33 @@ fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
 from coma.interfaces import RegionalValues, nonlinfit_fn, CMR_glucose
 
 
+
+def return_subject_data(subject_id, data_file):
+    import csv
+    from nipype import logging
+    iflogger = logging.getLogger('interface')
+
+    f = open(data_file, 'r')
+    csv_line_by_line = csv.reader(f)
+    found = False
+    # Must be stored in this order!:
+    # 'subject_id', 'dose', 'weight', 'delay', 'glycemie', 'scan_time']
+    for line in csv_line_by_line:
+        if line[0] == subject_id:
+            dose, weight, delay, glycemie, scan_time = [float(x) for x in line[1:]]
+            iflogger.info('Subject %s found' % subject_id)
+            iflogger.info('Dose: %s' % dose)
+            iflogger.info('Weight: %s' % weight)
+            iflogger.info('Delay: %s' % delay)
+            iflogger.info('Glycemie: %s' % glycemie)
+            iflogger.info('Scan Time: %s' % scan_time)
+            found = True
+            break
+    if not found:
+        raise Exception("Subject id %s was not in the data file!" % subject_id)
+    return dose, weight, delay, glycemie, scan_time
+
+
 def select_ribbon(list_of_files):
     from nipype.utils.filemanip import split_filename
     for in_file in list_of_files:
@@ -107,8 +134,12 @@ def wm_labels_only(in_file):
 
     _, name, _ = split_filename(in_file)
     out_file = op.abspath(name) + "_wmmask.nii.gz"
-    out_image = nb.Nifti1Image(
-        data=out_data, header=in_header, affine=in_image.get_affine())
+    try:
+        out_image = nb.Nifti1Image(
+            data=out_data, header=in_header, affine=in_image.get_affine())
+    except TypeError:
+        out_image = nb.Nifti1Image(
+            dataobj=out_data, header=in_header, affine=in_image.get_affine())
     nb.save(out_image, out_file)
     return out_file
 
@@ -121,26 +152,6 @@ def extract_PreCoTh(in_file):
     in_image = nb.load(in_file)
     in_header = in_image.get_header()
     in_data = in_image.get_data()
-
-    #Left, Right
-    # Thalamus are 76 and 35
-    # Precuneus are 61 and 20
-    # Cortex 3 and 42
-
-    # MAPPING = [
-    #     [42, 2012], [42, 2019], [42, 2032], [42, 2014], [42, 2020], [42, 2018],
-    #     [42,2027], [42, 2028], [42, 2003], [42, 2024], [42, 2017], [42, 2026],
-    #     [42, 2002], [42, 2023], [42, 2010], [42, 2022], [42, 2031], [42,2029],
-    #     [42, 2008], [42, 2005], [42, 2021], [42, 2011],
-    #     [42, 2013], [42, 2007], [42, 2016], [42, 2006], [42, 2033], [42,2009],
-    #     [42, 2015], [42, 2001], [42, 2030], [42, 2034], [42, 2035],
-    #     [3, 1012], [3, 1019], [3, 1032], [3, 1014], [3, 1020], [3, 1018],
-    #     [3, 1027], [3, 1028], [3, 1003], [3, 1024], [3, 1017], [3,1026],
-    #     [3, 1002], [3, 1023], [3, 1010], [3, 1022], [3, 1031],
-    #     [3, 1029], [3, 1008],  [3, 1005], [3, 1021], [3, 1011], [3,1013],
-    #     [3, 1007], [3, 1016], [3, 1006], [3, 1033],
-    #     [3, 1009], [3, 1015], [3, 1001], [3, 1030], [3, 1034], [3, 1035],
-    #     [61, 1025], [76, 10], [20, 2025], [35, 49]]
 
     # Left, Right -> Now
     # Thalamus are 71 and 35
@@ -169,13 +180,16 @@ def extract_PreCoTh(in_file):
 
     niiGM = np.zeros(in_data.shape, dtype=np.uint)
     for ma in MAPPING:
-        # print ma
         niiGM[in_data == ma[1]] = ma[0]
 
     _, name, _ = split_filename(in_file)
     out_file = op.abspath(name) + "_pre_co_th.nii.gz"
-    out_image = nb.Nifti1Image(
-        data=niiGM, header=in_header, affine=in_image.get_affine())
+    try:
+        out_image = nb.Nifti1Image(
+            data=niiGM, header=in_header, affine=in_image.get_affine())
+    except TypeError:
+        out_image = nb.Nifti1Image(
+            dataobj=niiGM, header=in_header, affine=in_image.get_affine())
     nb.save(out_image, out_file)
     return out_file
 
@@ -213,14 +227,13 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     mni_for_reg = op.join(os.environ["FSL_DIR"],"data","standard","MNI152_T1_1mm.nii.gz")
     reorientBrain = pe.Node(interface=fsl.FLIRT(dof=6), name = 'reorientBrain')
     reorientBrain.inputs.reference = mni_for_reg
-    #reorientBrain.inputs.no_resample = True
     reorientROIs = pe.Node(interface=fsl.ApplyXfm(), name = 'reorientROIs')
     reorientROIs.inputs.interp = "nearestneighbour"
     reorientROIs.inputs.reference = mni_for_reg
     reorientRibbon = reorientROIs.clone("reorientRibbon")
     reorientRibbon.inputs.interp = "nearestneighbour"
     reorientT1 = reorientROIs.clone("reorientT1")
-    reorientT1.inputs.interp = "spline"
+    reorientT1.inputs.interp = "trilinear"
 
     fsl2mrtrix = pe.Node(interface=mrtrix.FSL2MRTrix(), name='fsl2mrtrix')
     fsl2mrtrix.inputs.invert_y = True
@@ -459,7 +472,8 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
 
     output_fields = ["fa", "rgb_fa", "md", "csdeconv", "tracts_tck", "rois", "t1",
         "t1_brain", "wmmask_dtispace", "fa_t1space", "summary", "filtered_tractographies",
-        "matrix_file", "connectome", "CMR_nodes"]
+        "matrix_file", "connectome", "CMR_nodes", "fiber_labels_noorphans", "fiber_length_file",
+        "fiber_label_file"]
 
     outputnode = pe.Node(
         interface=util.IdentityInterface(fields=output_fields),
@@ -476,6 +490,9 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
          (thalamus2precuneus2cortex_ROIs, outputnode, [("out_file", "rois")]),
          (thalamus2precuneus2cortex, outputnode, [("filtered_tractographies", "filtered_tractographies")]),
          (thalamus2precuneus2cortex, outputnode, [("matrix_file", "connectome")]),
+         (thalamus2precuneus2cortex, outputnode, [("fiber_labels_noorphans", "fiber_labels_noorphans")]),
+         (thalamus2precuneus2cortex, outputnode, [("fiber_length_file", "fiber_length_file")]),
+         (thalamus2precuneus2cortex, outputnode, [("fiber_label_file", "fiber_label_file")]),
          (fdgpet_regions, outputnode, [("networks", "CMR_nodes")]),
          (nonlinfit_node, outputnode, [("rgb_fa", "rgb_fa")]),
          (nonlinfit_node, outputnode, [("MD", "md")]),
@@ -485,27 +502,337 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     return workflow
 
 
-def return_subject_data(subject_id, data_file):
-    import csv
-    from nipype import logging
-    iflogger = logging.getLogger('interface')
+def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True):
+    inputnode = pe.Node(
+        interface=util.IdentityInterface(fields=["subjects_dir",
+                                                 "subject_id",
+                                                 "dwi",
+                                                 "bvecs",
+                                                 "bvals",
+                                                 "fdgpet"]),
+        name="inputnode")
 
-    f = open(data_file, 'r')
-    csv_line_by_line = csv.reader(f)
-    found = False
-    # Must be stored in this order!:
-    # 'subject_id', 'dose', 'weight', 'delay', 'glycemie', 'scan_time']
-    for line in csv_line_by_line:
-        if line[0] == subject_id:
-            dose, weight, delay, glycemie, scan_time = [float(x) for x in line[1:]]
-            iflogger.info('Subject %s found' % subject_id)
-            iflogger.info('Dose: %s' % dose)
-            iflogger.info('Weight: %s' % weight)
-            iflogger.info('Delay: %s' % delay)
-            iflogger.info('Glycemie: %s' % glycemie)
-            iflogger.info('Scan Time: %s' % scan_time)
-            found = True
-            break
-    if not found:
-        raise Exception("Subject id %s was not in the data file!" % subject_id)
-    return dose, weight, delay, glycemie, scan_time
+    nonlinfit_interface = util.Function(input_names=["dwi", "bvecs", "bvals", "base_name"],
+    output_names=["tensor", "FA", "MD", "evecs", "evals", "rgb_fa", "norm", "mode", "binary_mask", "b0_masked"], function=nonlinfit_fn)
+
+    nonlinfit_node = pe.Node(interface=nonlinfit_interface, name="nonlinfit_node")
+    erode_mask_firstpass = pe.Node(interface=mrtrix.Erode(),
+                                   name='erode_mask_firstpass')
+    erode_mask_firstpass.inputs.out_filename = "b0_mask_median3D_erode.nii.gz"
+    erode_mask_secondpass = pe.Node(interface=mrtrix.Erode(),
+                                    name='erode_mask_secondpass')
+    erode_mask_secondpass.inputs.out_filename = "b0_mask_median3D_erode_secondpass.nii.gz"
+
+    threshold_FA = pe.Node(interface=fsl.ImageMaths(), name='threshold_FA')
+    threshold_FA.inputs.op_string = "-thr 0.8 -uthr 0.99"
+
+    make_termination_mask = pe.Node(interface=fsl.ImageMaths(), name='make_termination_mask')
+    make_termination_mask.inputs.op_string = "-bin"
+
+    wm_mask_interface = util.Function(input_names=["in_file"],
+                                         output_names=["out_file"],
+                                         function=wm_labels_only)
+    make_wm_mask = pe.Node(
+        interface=wm_mask_interface, name='make_wm_mask')
+
+    MRmultiply = pe.Node(interface=mrtrix.MRMultiply(), name='MRmultiply')
+    MRmultiply.inputs.out_filename = "Eroded_FA.nii.gz"
+    MRmult_merge = pe.Node(interface=util.Merge(2), name='MRmultiply_merge')
+
+    median3d = pe.Node(interface=mrtrix.MedianFilter3D(), name='median3D')
+
+    FreeSurferSource = pe.Node(
+        interface=nio.FreeSurferSource(), name='fssource')
+    mri_convert_Brain = pe.Node(
+        interface=fs.MRIConvert(), name='mri_convert_Brain')
+    mri_convert_Brain.inputs.out_type = 'niigz'
+    mri_convert_Ribbon = mri_convert_Brain.clone("mri_convert_Ribbon")
+    mri_convert_ROIs = mri_convert_Brain.clone("mri_convert_ROIs")
+    mri_convert_T1 = mri_convert_Brain.clone("mri_convert_T1")
+    
+    mni_for_reg = op.join(os.environ["FSL_DIR"],"data","standard","MNI152_T1_1mm.nii.gz")
+    reorientBrain = pe.Node(interface=fsl.FLIRT(dof=6), name = 'reorientBrain')
+    reorientBrain.inputs.reference = mni_for_reg
+    reorientROIs = pe.Node(interface=fsl.ApplyXfm(), name = 'reorientROIs')
+    reorientROIs.inputs.interp = "nearestneighbour"
+    reorientROIs.inputs.reference = mni_for_reg
+    reorientRibbon = reorientROIs.clone("reorientRibbon")
+    reorientRibbon.inputs.interp = "nearestneighbour"
+    reorientT1 = reorientROIs.clone("reorientT1")
+    reorientT1.inputs.interp = "trilinear"
+
+    if reg_pet_T1:
+        reg_pet_T1 = pe.Node(interface=fsl.FLIRT(dof=6), name = 'reg_pet_T1')
+        reg_pet_T1.inputs.cost = ('corratio')
+    
+    reslice_fdgpet = mri_convert_Brain.clone("reslice_fdgpet")
+
+    extract_PreCoTh_interface = util.Function(input_names=["in_file"],
+                                         output_names=["out_file"],
+                                         function=extract_PreCoTh)
+    thalamus2precuneus2cortex_ROIs = pe.Node(
+        interface=extract_PreCoTh_interface, name='thalamus2precuneus2cortex_ROIs')
+
+
+    workflow = pe.Workflow(name=name)
+    workflow.base_output_dir = name
+
+    workflow.connect(
+        [(inputnode, FreeSurferSource, [("subjects_dir", "subjects_dir")])])
+    workflow.connect(
+        [(inputnode, FreeSurferSource, [("subject_id", "subject_id")])])
+
+    workflow.connect(
+        [(FreeSurferSource, mri_convert_T1, [('T1', 'in_file')])])
+    workflow.connect(
+        [(mri_convert_T1, reorientT1, [('out_file', 'in_file')])])
+
+    workflow.connect(
+        [(FreeSurferSource, mri_convert_Brain, [('brain', 'in_file')])])
+    workflow.connect(
+        [(mri_convert_Brain, reorientBrain, [('out_file', 'in_file')])])
+    workflow.connect(
+        [(reorientBrain, reorientROIs, [('out_matrix_file', 'in_matrix_file')])])
+    workflow.connect(
+        [(reorientBrain, reorientRibbon, [('out_matrix_file', 'in_matrix_file')])])
+    workflow.connect(
+        [(reorientBrain, reorientT1, [('out_matrix_file', 'in_matrix_file')])])
+
+    workflow.connect(
+        [(FreeSurferSource, mri_convert_ROIs, [(('aparc_aseg', select_aparc), 'in_file')])])
+    workflow.connect(
+        [(mri_convert_ROIs, reorientROIs, [('out_file', 'in_file')])])
+    workflow.connect(
+        [(reorientROIs, make_wm_mask, [('out_file', 'in_file')])])
+    workflow.connect(
+        [(reorientROIs, thalamus2precuneus2cortex_ROIs, [("out_file", "in_file")])])
+
+    workflow.connect(
+        [(FreeSurferSource, mri_convert_Ribbon, [(('ribbon', select_ribbon), 'in_file')])])
+    workflow.connect(
+        [(mri_convert_Ribbon, reorientRibbon, [('out_file', 'in_file')])])
+    workflow.connect(
+        [(reorientRibbon, make_termination_mask, [('out_file', 'in_file')])])
+
+    workflow.connect(inputnode, 'dwi', nonlinfit_node, 'dwi')
+    workflow.connect(inputnode, 'subject_id', nonlinfit_node, 'base_name')
+    workflow.connect(inputnode, 'bvecs', nonlinfit_node, 'bvecs')
+    workflow.connect(inputnode, 'bvals', nonlinfit_node, 'bvals')
+
+    if reg_pet_T1:
+        workflow.connect([(inputnode, reg_pet_T1, [("fdgpet", "in_file")])])
+        workflow.connect(
+            [(reorientBrain, reg_pet_T1, [("out_file", "reference")])])
+        workflow.connect(
+            [(reg_pet_T1, reslice_fdgpet, [("out_file", "in_file")])])
+        workflow.connect(
+            [(reorientROIs, reslice_fdgpet, [("out_file", "reslice_like")])])
+
+    else:
+        workflow.connect([(inputnode, reslice_fdgpet, [("fdgpet", "in_file")])])
+        workflow.connect(
+            [(reorientROIs, reslice_fdgpet, [("out_file", "reslice_like")])])
+
+    workflow.connect([(nonlinfit_node, median3d, [("binary_mask", "in_file")])])
+    workflow.connect(
+        [(median3d, erode_mask_firstpass, [("out_file", "in_file")])])
+    workflow.connect(
+        [(erode_mask_firstpass, erode_mask_secondpass, [("out_file", "in_file")])])
+    workflow.connect([(nonlinfit_node, MRmult_merge, [("FA", "in1")])])
+    workflow.connect(
+        [(erode_mask_secondpass, MRmult_merge, [("out_file", "in2")])])
+    workflow.connect([(MRmult_merge, MRmultiply, [("out", "in_files")])])
+    workflow.connect([(MRmultiply, threshold_FA, [("out_file", "in_file")])])
+
+    output_fields = ["single_fiber_mask", "fa", "rgb_fa", "md", "t1", "t1_brain",
+    "wm_mask", "term_mask", "fdgpet", "rois"]
+
+    outputnode = pe.Node(
+        interface=util.IdentityInterface(fields=output_fields),
+        name="outputnode")
+
+    workflow.connect([
+         (reorientBrain, outputnode, [("out_file", "t1_brain")]),
+         (reorientT1, outputnode, [("out_file", "t1")]),
+         (nonlinfit_node, outputnode, [("FA", "fa")]),
+         (nonlinfit_node, outputnode, [("rgb_fa", "rgb_fa")]),
+         (nonlinfit_node, outputnode, [("MD", "md")]),
+         (threshold_FA, outputnode, [("out_file", "single_fiber_mask")]),
+         (make_wm_mask, outputnode, [("out_file", "wm_mask")]),
+         (make_termination_mask, outputnode, [("out_file", "term_mask")]),
+         (reslice_fdgpet, outputnode, [("out_file", "fdgpet")]),
+         (thalamus2precuneus2cortex_ROIs, outputnode, [("out_file", "rois")]),
+         ])
+    return workflow
+
+
+
+
+def create_precoth_pipeline_step2(name="precoth_step2", tractography_type='probabilistic', reg_pet_T1=True):
+    inputnode = pe.Node(
+        interface=util.IdentityInterface(fields=["subjects_dir",
+                                                 "subject_id",
+                                                 "dwi",
+                                                 "bvecs",
+                                                 "bvals",
+                                                 "fdgpet",
+                                                 "dose",
+                                                 "weight",
+                                                 "delay",
+                                                 "glycemie",
+                                                 "scan_time",
+                                                 "single_fiber_mask",
+                                                 "fa",
+                                                 "t1_brain",
+                                                 "wm_mask",
+                                                 "term_mask",
+                                                 "rois",
+                                                 ]),
+        name="inputnode")
+
+    coregister = pe.Node(interface=fsl.FLIRT(dof=12), name = 'coregister')
+    coregister.inputs.cost = ('normmi')
+
+    invertxfm = pe.Node(interface=fsl.ConvertXFM(), name = 'invertxfm')
+    invertxfm.inputs.invert_xfm = True
+
+    WM_to_FA = pe.Node(interface=fsl.ApplyXfm(), name = 'WM_to_FA')
+    WM_to_FA.inputs.interp = 'nearestneighbour'
+    TermMask_to_FA = WM_to_FA.clone("TermMask_to_FA")
+
+    fsl2mrtrix = pe.Node(interface=mrtrix.FSL2MRTrix(), name='fsl2mrtrix')
+    fsl2mrtrix.inputs.invert_y = True
+
+    fdgpet_regions = pe.Node(interface=RegionalValues(), name='fdgpet_regions')
+
+    compute_cmr_glc_interface = util.Function(input_names=["in_file", "dose", "weight", "delay",
+        "glycemie", "scan_time"], output_names=["out_file"], function=CMR_glucose)
+    compute_cmr_glc = pe.Node(interface=compute_cmr_glc_interface, name='compute_cmr_glc')
+
+    csdeconv = pe.Node(interface=mrtrix.ConstrainedSphericalDeconvolution(),
+                       name='csdeconv')
+
+    estimateresponse = pe.Node(interface=mrtrix.EstimateResponseForSH(),
+                               name='estimateresponse')
+
+    if tractography_type == 'probabilistic':
+        CSDstreamtrack = pe.Node(
+            interface=mrtrix.ProbabilisticSphericallyDeconvolutedStreamlineTrack(
+            ),
+            name='CSDstreamtrack')
+    else:
+        CSDstreamtrack = pe.Node(
+            interface=mrtrix.SphericallyDeconvolutedStreamlineTrack(),
+            name='CSDstreamtrack')
+
+    CSDstreamtrack.inputs.desired_number_of_tracks = 10000
+
+    tck2trk = pe.Node(interface=mrtrix.MRTrix2TrackVis(), name='tck2trk')
+
+    write_precoth_data_interface = util.Function(input_names=["dwi_network_file", "fdg_stats_file", "subject_id"],
+                                         output_names=["out_file"],
+                                         function=summarize_precoth)
+    write_csv_data = pe.Node(
+        interface=write_precoth_data_interface, name='write_csv_data')
+
+    thalamus2precuneus2cortex = pe.Node(
+        interface=cmtk.CreateMatrix(), name="thalamus2precuneus2cortex")
+    thalamus2precuneus2cortex.inputs.count_region_intersections = True
+
+    workflow = pe.Workflow(name=name)
+    workflow.base_output_dir = name
+
+    workflow.connect([(inputnode, fsl2mrtrix, [("bvecs", "bvec_file"),
+                                               ("bvals", "bval_file")])])
+
+    workflow.connect([(inputnode, fdgpet_regions, [("rois", "segmentation_file")])])
+    workflow.connect([(inputnode, compute_cmr_glc, [("fdgpet", "in_file")])])
+    workflow.connect([(inputnode, compute_cmr_glc, [("dose", "dose")])])
+    workflow.connect([(inputnode, compute_cmr_glc, [("weight", "weight")])])
+    workflow.connect([(inputnode, compute_cmr_glc, [("delay", "delay")])])
+    workflow.connect([(inputnode, compute_cmr_glc, [("glycemie", "glycemie")])])
+    workflow.connect([(inputnode, compute_cmr_glc, [("scan_time", "scan_time")])])
+    workflow.connect([(compute_cmr_glc, fdgpet_regions, [("out_file", "in_files")])])
+
+    workflow.connect([(inputnode, coregister,[("fa","in_file")])])
+    workflow.connect([(inputnode, coregister,[('wm_mask','reference')])])
+    workflow.connect([(inputnode, tck2trk,[("fa","image_file")])])
+    
+    # MAY NEED TO CHANGE to T1
+    workflow.connect([(inputnode, tck2trk,[("wm_mask","registration_image_file")])])
+    #
+    workflow.connect([(coregister, tck2trk,[("out_matrix_file","matrix_file")])])
+    
+    workflow.connect([(coregister, invertxfm,[("out_matrix_file","in_file")])])
+    workflow.connect([(invertxfm, WM_to_FA,[("out_file","in_matrix_file")])])
+    workflow.connect([(inputnode, WM_to_FA,[("wm_mask","in_file")])])
+    workflow.connect([(inputnode, WM_to_FA,[("fa","reference")])])
+    
+    workflow.connect([(invertxfm, TermMask_to_FA,[("out_file","in_matrix_file")])])
+    workflow.connect([(inputnode, TermMask_to_FA,[("term_mask","in_file")])])
+    workflow.connect([(inputnode, TermMask_to_FA,[("fa","reference")])])
+
+    workflow.connect([(inputnode, estimateresponse, [("single_fiber_mask", "mask_image")])])
+
+    workflow.connect([(inputnode, estimateresponse, [("dwi", "in_file")])])
+    workflow.connect(
+        [(fsl2mrtrix, estimateresponse, [("encoding_file", "encoding_file")])])
+
+    workflow.connect([(inputnode, csdeconv, [("dwi", "in_file")])])
+    workflow.connect(
+        [(TermMask_to_FA, csdeconv, [("out_file", "mask_image")])])
+    workflow.connect(
+        [(estimateresponse, csdeconv, [("response", "response_file")])])
+    workflow.connect(
+        [(fsl2mrtrix, csdeconv, [("encoding_file", "encoding_file")])])
+    workflow.connect(
+        [(WM_to_FA, CSDstreamtrack, [("out_file", "seed_file")])])
+    workflow.connect(
+        [(TermMask_to_FA, CSDstreamtrack, [("out_file", "mask_file")])])
+    workflow.connect(
+        [(csdeconv, CSDstreamtrack, [("spherical_harmonics_image", "in_file")])])
+
+    workflow.connect([(CSDstreamtrack, tck2trk, [("tracked", "in_file")])])
+
+    workflow.connect(
+        [(tck2trk, thalamus2precuneus2cortex, [("out_file", "tract_file")])])
+    workflow.connect(
+        [(inputnode, thalamus2precuneus2cortex, [("subject_id", "out_matrix_file")])])
+    workflow.connect(
+        [(inputnode, thalamus2precuneus2cortex, [("subject_id", "out_matrix_mat_file")])])
+
+    workflow.connect(
+        [(inputnode, thalamus2precuneus2cortex, [("rois", "roi_file")])])
+    workflow.connect(
+        [(thalamus2precuneus2cortex, fdgpet_regions, [("matrix_file", "resolution_network_file")])])
+
+    workflow.connect(
+        [(inputnode, write_csv_data, [("subject_id", "subject_id")])])
+    workflow.connect(
+        [(fdgpet_regions, write_csv_data, [("stats_file", "fdg_stats_file")])])
+    workflow.connect(
+        [(thalamus2precuneus2cortex, write_csv_data, [("matrix_file", "dwi_network_file")])])
+
+    output_fields = ["csdeconv", "tracts_tck", "summary", "filtered_tractographies",
+        "matrix_file", "connectome", "CMR_nodes", "fiber_labels_noorphans", "fiber_length_file",
+        "fiber_label_file", "fa_t1space"]
+
+    outputnode = pe.Node(
+        interface=util.IdentityInterface(fields=output_fields),
+        name="outputnode")
+
+    workflow.connect(
+        [(CSDstreamtrack, outputnode, [("tracked", "tracts_tck")]),
+         (csdeconv, outputnode,
+          [("spherical_harmonics_image", "csdeconv")]),
+         (coregister, outputnode, [("out_file", "fa_t1space")]),
+         (thalamus2precuneus2cortex, outputnode, [("filtered_tractographies", "filtered_tractographies")]),
+         (thalamus2precuneus2cortex, outputnode, [("matrix_file", "connectome")]),
+         (thalamus2precuneus2cortex, outputnode, [("fiber_labels_noorphans", "fiber_labels_noorphans")]),
+         (thalamus2precuneus2cortex, outputnode, [("fiber_length_file", "fiber_length_file")]),
+         (thalamus2precuneus2cortex, outputnode, [("fiber_label_file", "fiber_label_file")]),
+         (fdgpet_regions, outputnode, [("networks", "CMR_nodes")]),
+         (write_csv_data, outputnode, [("out_file", "summary")]),
+         ])
+
+    return workflow
