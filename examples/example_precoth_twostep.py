@@ -4,7 +4,7 @@ import nipype.interfaces.io as nio           # Data i/o
 import nipype.interfaces.utility as util     # utility
 import nipype.pipeline.engine as pe          # pypeline engine
 import nipype.interfaces.fsl as fsl
-from nipype.workflows.dmri.fsl.dti import create_eddy_correct_pipeline
+from nipype.workflows.dmri.fsl.epi import create_motion_correct_pipeline, create_eddy_correct_pipeline
 
 fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
 
@@ -58,12 +58,17 @@ workflow = pe.Workflow(name='ex_precoth1')
 workflow.base_dir = output_dir
 workflow.connect([(infosource, datasource_step1,[('subject_id', 'subject_id')])])
 
-eddycorrect = create_eddy_correct_pipeline(name='eddycorrect')
-eddycorrect.inputs.inputnode.ref_num = 1
+motioncorrect = create_motion_correct_pipeline(name='motioncorrect')
+motioncorrect.inputs.inputnode.ref_num = 0
 
-workflow.connect([(datasource_step1, eddycorrect,[('dwi', 'inputnode.in_file')])])
+eddycorrect = create_eddy_correct_pipeline(name='eddycorrect')
+eddycorrect.inputs.inputnode.ref_num = 0
+
+workflow.connect([(datasource_step1, motioncorrect,[('dwi', 'inputnode.in_file')])])
+workflow.connect([(motioncorrect, eddycorrect,[('outputnode.motion_corrected', 'inputnode.in_file')])])
 workflow.connect([(eddycorrect, step1,[('outputnode.eddy_corrected', 'inputnode.dwi')])])
-workflow.connect([(datasource_step1, step1,[('bvecs', 'inputnode.bvecs')])])
+workflow.connect([(motioncorrect, step1,[('outputnode.out_bvec', 'inputnode.bvecs')])])
+
 workflow.connect([(datasource_step1, step1,[('bvals', 'inputnode.bvals')])])
 workflow.connect([(infosource, step1,[('subject_id', 'inputnode.subject_id')])])
 workflow.connect([(datasource_step1, step1,[('fdg_pet_image', 'inputnode.fdgpet')])])
@@ -83,7 +88,7 @@ workflow.connect([(step1, datasink_step1, [("outputnode.fa", "@subject_id.fa"),
 
 workflow.connect([(eddycorrect, datasink_step1,[('outputnode.eddy_corrected', '@subject_id.corrected_dwi')])])
 workflow.write_graph()
-#workflow.run()
+workflow.run()
 #workflow.run(plugin='MultiProc', plugin_args={'n_procs' : 4})
 
 
@@ -101,7 +106,7 @@ step2.inputs.inputnode.subjects_dir = subjects_dir
 step2.inputs.thalamus2precuneus2cortex.resolution_network_file = res_ntwk_file
 
 
-info_step2 = dict(corrected_dwi=[['subject_id']],
+info_step2 = dict(eddycorrected_dwi=[['subject_id']],
                 fdg_pet_image=[['subject_id']],
                 fa=[['subject_id']],
                 single_fiber_mask=[['subject_id']],
@@ -116,7 +121,7 @@ datasource_step2 = pe.Node(interface=nio.DataGrabber(infields=['subject_id'],
 
 datasource_step2.inputs.template = "%s/%s"
 datasource_step2.inputs.base_directory = step1_dir
-datasource_step2.inputs.field_template = dict(corrected_dwi='corrected_dwi/*%s/*.nii.gz',
+datasource_step2.inputs.field_template = dict(eddycorrected_dwi='eddycorrected_dwi/*%s/*.nii.gz',
                                               fdg_pet_image='fdgpet/*%s/*.nii.gz',
                                               fa='fa/*%s/*.nii.gz',
                                               single_fiber_mask='single_fiber_mask/*%s/*.nii.gz',
@@ -137,10 +142,10 @@ workflow2.base_dir = output_dir
 workflow2.connect([(infosource, datasource_step1,[('subject_id', 'subject_id')])])
 workflow2.connect([(infosource, datasource_step2,[('subject_id', 'subject_id')])])
 
-workflow2.connect([(datasource_step1, step2,[('bvecs', 'inputnode.bvecs')])])
+workflow.connect([(motioncorrect, step2,[('outputnode.out_bvec', 'inputnode.bvecs')])])
 workflow2.connect([(datasource_step1, step2,[('bvals', 'inputnode.bvals')])])
 
-workflow2.connect([(datasource_step2, step2,[('corrected_dwi', 'inputnode.dwi')])])
+workflow2.connect([(datasource_step2, step2,[('eddycorrected_dwi', 'inputnode.dwi')])])
 workflow2.connect([(datasource_step2, step2,[('fdg_pet_image', 'inputnode.fdgpet')])])
 workflow2.connect([(datasource_step2, step2,[('fa', 'inputnode.fa')])])
 workflow2.connect([(datasource_step2, step2,[('single_fiber_mask', 'inputnode.single_fiber_mask')])])
@@ -168,4 +173,4 @@ workflow2.connect([(step2, datasink_step2, [("outputnode.csdeconv", "@subject_id
                                           ("outputnode.CMR_nodes", "@subject_id.CMR_nodes"),
                                           ("outputnode.fa_t1space", "@subject_id.fa_t1space"),
                                           ])])
-workflow2.run()
+#workflow2.run()

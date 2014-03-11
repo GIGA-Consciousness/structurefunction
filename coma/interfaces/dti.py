@@ -39,19 +39,16 @@ def nonlinfit_fn(dwi, bvecs, bvals, base_name):
     print('Computing anisotropy measures (FA, MD, RGB)')
     from dipy.reconst.dti import fractional_anisotropy, color_fa
 
-    FA = fractional_anisotropy(tenfit.evals)
-    FA[np.isnan(FA)] = 0
+    evals = tenfit.evals.astype(np.float32)
+    FA = fractional_anisotropy(np.abs(evals))
     FA = np.clip(FA, 0, 1)
 
-    MD = dti.mean_diffusivity(tenfit.evals)
+    MD = dti.mean_diffusivity(np.abs(evals))
     norm = dti.norm(tenfit.quadratic_form)
 
     RGB = color_fa(FA, tenfit.evecs)
 
     evecs = tenfit.evecs.astype(np.float32)
-
-    evals = tenfit.evals.astype(np.float32)
-
     mode = tenfit.mode.astype(np.float32)
 
     # Write tensor as a 4D Nifti image with the original affine
