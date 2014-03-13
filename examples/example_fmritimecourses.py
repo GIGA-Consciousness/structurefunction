@@ -5,6 +5,7 @@ import nipype.algorithms.misc as misc
 import nipype.interfaces.cmtk as cmtk
 import nipype.interfaces.freesurfer as fs
 import nipype.pipeline.engine as pe          # pypeline engine
+import coma.interfaces as ci
 
 from coma.datasets import sample
 data_path = sample.data_path()
@@ -33,7 +34,7 @@ datasource.inputs.sort_filelist = True
 resample_functional = pe.MapNode(interface=fs.MRIConvert(), name='resample_functional', iterfield=["in_file"])
 resample_functional.inputs.out_type = 'nii'
 
-fmri_timecourses = pe.Node(interface=cmtk.RegionalValues(), name="fmri_timecourses")
+fmri_timecourses = pe.Node(interface=ci.RegionalValues(), name="fmri_timecourses")
 fmri_timecourses.inputs.out_stats_file = 'fmri_timecourses.mat'
 
 datasink = pe.Node(interface=nio.DataSink(), name="datasink")
