@@ -7,7 +7,8 @@ def create4Ddwi(name,out):
 	name = str(name)
 	out = str(out)
 	a = glob.glob(name + "*.img")
-	assert(len(a) == 130)
+	assert(len(a) >= 30)
+	print("%i volumes found" % len(a))
 	a.sort(key=lambda x: x[-8:])
 	import nibabel as nb
 	print("Concatenating %i files" % len(a))
