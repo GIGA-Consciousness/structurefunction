@@ -1,3 +1,7 @@
+#!/usr/bin/env python
+import os, sys
+import string
+
 def nonlinfit_fn(dwi, bvecs, bvals, base_name):
     import nibabel as nb
     import numpy as np
@@ -124,3 +128,22 @@ def remove_bad_volumes(dwi, bvec_file, bval_file, thresh=0.8):
     np.savetxt(out_bvals, corr_bvals)
     print("%d volumes were removed at threshold %f" % (n_removed, thresh))
     return out_dwi, out_bvecs, out_bvals, n_removed
+
+
+
+def fixVib(in_dwi, in_bvec, in_bval, x_thresh=0.6):
+	from nipype.utils.filemanip import split_filename
+	x_thresh = float(x_thresh)
+	_, name, _ = split_filename(in_dwi)
+	print("Removing bad volumes...")
+	corr_dwi, corr_bvec, corr_bval, n = remove_bad_volumes(in_dwi, in_bvec, in_bval, x_thresh)
+	out_basename = name + "_Corr%0.3f" % x_thresh
+	print("Fitting tensors...")
+	nonlinfit_fn(corr_dwi, corr_bvec, corr_bval, out_basename)
+	return out_basename
+
+
+if __name__ == '__main__':
+	# Should probably use argparse for this
+	in_dwi, in_bvec, in_bval, x_thresh = sys.argv[1:]
+	fixVib(in_dwi, in_bvec, in_bval, x_thresh)
