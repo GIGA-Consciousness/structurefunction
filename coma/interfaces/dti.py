@@ -84,3 +84,43 @@ def nonlinfit_fn(dwi, bvecs, bvals, base_name):
     return out_tensor_file, out_fa_file, out_md_file, \
         out_evecs_file, out_evals_file, out_rgb_fa_file, out_norm_file, \
         out_mode_file, out_mask_name, out_b0_name
+
+def remove_bad_volumes(dwi, bvec_file, bval_file, thresh=0.8):
+    import numpy as np
+    import nibabel as nb
+    import os.path as op
+    from nipype.utils.filemanip import split_filename
+
+    dwi_4D = nb.load(dwi)
+    dwi_files = nb.four_to_three(dwi_4D)
+
+    bvecs = np.transpose(np.loadtxt(bvec_file))
+    bvals = np.transpose(np.loadtxt(bval_file))
+
+    bad_indices = np.where(np.abs(bvecs[:,0]) >= thresh)[0]
+    n_removed = len(bad_indices)
+
+    dwi_files = [i for j, i in enumerate(dwi_files) if j not in bad_indices]
+    bvecs = [i for j, i in enumerate(bvecs) if j not in bad_indices]
+    bvals = [i for j, i in enumerate(bvals) if j not in bad_indices]
+
+    corr_dwi = nb.concat_images(dwi_files)
+    corr_bvecs = np.transpose(bvecs)
+    corr_bvals = np.transpose(bvals)
+
+    assert(len(dwi_files) == len(bvecs) == len(bvals))
+
+    _, name, _ = split_filename(dwi)
+    out_dwi = op.abspath(name + "_vib.nii.gz")
+
+    _, bvec_name, _ = split_filename(bvec_file)
+    out_bvecs = op.abspath(bvec_name + "_vib.bvec")
+
+    _, bval_name, _ = split_filename(bval_file)
+    out_bvals = op.abspath(bval_name + "_vib.bval")
+
+    nb.save(corr_dwi, out_dwi)
+    np.savetxt(out_bvecs, corr_bvecs)
+    np.savetxt(out_bvals, corr_bvals)
+    print("%d volumes were removed at threshold %f" % (n_removed, thresh))
+    return out_dwi, out_bvecs, out_bvals, n_removed
