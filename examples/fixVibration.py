@@ -89,7 +89,7 @@ def nonlinfit_fn(dwi, bvecs, bvals, base_name):
         out_evecs_file, out_evals_file, out_rgb_fa_file, out_norm_file, \
         out_mode_file, out_mask_name, out_b0_name
 
-def remove_bad_volumes(dwi, bvec_file, bval_file, thresh=0.8):
+def remove_bad_volumes(dwi, bvec_file, bval_file, base_name, thresh):
     import numpy as np
     import nibabel as nb
     import os.path as op
@@ -115,13 +115,13 @@ def remove_bad_volumes(dwi, bvec_file, bval_file, thresh=0.8):
     assert(len(dwi_files) == len(bvecs) == len(bvals))
 
     _, name, _ = split_filename(dwi)
-    out_dwi = op.abspath(name + "_vib.nii.gz")
+    out_dwi = op.abspath(base_name + "%f_vib.nii.gz" % thresh)
 
     _, bvec_name, _ = split_filename(bvec_file)
-    out_bvecs = op.abspath(bvec_name + "_vib.bvec")
+    out_bvecs = op.abspath(base_name + "%f_vib.bvec"  % thresh)
 
     _, bval_name, _ = split_filename(bval_file)
-    out_bvals = op.abspath(bval_name + "_vib.bval")
+    out_bvals = op.abspath(base_name + "%f_vib.bval"  % thresh)
 
     nb.save(corr_dwi, out_dwi)
     np.savetxt(out_bvecs, corr_bvecs)
@@ -131,13 +131,13 @@ def remove_bad_volumes(dwi, bvec_file, bval_file, thresh=0.8):
 
 
 
-def fixVib(in_dwi, in_bvec, in_bval, x_thresh=0.6):
+def fixVib(in_dwi, in_bvec, in_bval, base_name, x_thresh):
 	from nipype.utils.filemanip import split_filename
 	x_thresh = float(x_thresh)
 	_, name, _ = split_filename(in_dwi)
 	print("Removing bad volumes...")
-	corr_dwi, corr_bvec, corr_bval, n = remove_bad_volumes(in_dwi, in_bvec, in_bval, x_thresh)
-	out_basename = name + "_Corr%0.3f" % x_thresh
+	corr_dwi, corr_bvec, corr_bval, n = remove_bad_volumes(in_dwi, in_bvec, in_bval, base_name, x_thresh)
+	out_basename = base_name + "_Corr%0.3f" % x_thresh
 	print("Fitting tensors...")
 	nonlinfit_fn(corr_dwi, corr_bvec, corr_bval, out_basename)
 	return out_basename
@@ -145,5 +145,5 @@ def fixVib(in_dwi, in_bvec, in_bval, x_thresh=0.6):
 
 if __name__ == '__main__':
 	# Should probably use argparse for this
-	in_dwi, in_bvec, in_bval, x_thresh = sys.argv[1:]
-	fixVib(in_dwi, in_bvec, in_bval, x_thresh)
+	in_dwi, in_bvec, in_bval, base_name, x_thresh = sys.argv[1:]
+	fixVib(in_dwi, in_bvec, in_bval, base_name, x_thresh)
