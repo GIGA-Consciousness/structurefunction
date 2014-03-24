@@ -9,10 +9,30 @@ import nipype.interfaces.mrtrix as mrtrix
 import nipype.interfaces.cmtk as cmtk
 from nipype.workflows.misc.utils import select_aparc
 
-fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
+fsl.FSLCommand.set_default_output_type('NIFTI')
 
 from coma.interfaces import RegionalValues, nonlinfit_fn, CMR_glucose
 
+def add_subj_name_to_sfmask(subject_id):
+    return subject_id + "_SingleFiberMask.nii.gz"
+
+def add_subj_name_to_fdgpet(subject_id):
+    return subject_id + "_fdgpet.nii"
+
+def add_subj_name_to_wmmask(subject_id):
+    return subject_id + "_wmmask.nii"
+
+def add_subj_name_to_termmask(subject_id):
+    return subject_id + "_cortex.nii"
+
+def add_subj_name_to_T1brain(subject_id):
+    return subject_id + "_T1brain.nii"
+
+def add_subj_name_to_T1(subject_id):
+    return subject_id + "_T1.nii"
+
+def add_subj_name_to_rois(subject_id):
+    return subject_id + "_PreCoTh_rois.nii"
 
 
 def return_subject_data(subject_id, data_file):
@@ -110,7 +130,7 @@ def summarize_precoth(dwi_network_file, fdg_stats_file, subject_id):
     return out_file
 
 
-def wm_labels_only(in_file):
+def wm_labels_only(in_file, out_filename):
     from nipype.utils.filemanip import split_filename
     import nibabel as nb
     import numpy as np
@@ -133,7 +153,7 @@ def wm_labels_only(in_file):
 
 
     _, name, _ = split_filename(in_file)
-    out_file = op.abspath(name) + "_wmmask.nii.gz"
+    out_file = op.abspath(out_filename)
     try:
         out_image = nb.Nifti1Image(
             data=out_data, header=in_header, affine=in_image.get_affine())
@@ -144,7 +164,7 @@ def wm_labels_only(in_file):
     return out_file
 
 
-def extract_PreCoTh(in_file):
+def extract_PreCoTh(in_file, out_filename):
     from nipype.utils.filemanip import split_filename
     import nibabel as nb
     import numpy as np
@@ -183,7 +203,7 @@ def extract_PreCoTh(in_file):
         niiGM[in_data == ma[1]] = ma[0]
 
     _, name, _ = split_filename(in_file)
-    out_file = op.abspath(name) + "_pre_co_th.nii.gz"
+    out_file = op.abspath(out_filename)
     try:
         out_image = nb.Nifti1Image(
             data=niiGM, header=in_header, affine=in_image.get_affine())
@@ -247,6 +267,8 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
  
     threshold_FA = pe.Node(interface=fsl.ImageMaths(), name='threshold_FA')
     threshold_FA.inputs.op_string = "-thr 0.8 -uthr 0.99"
+    threshold_mode = pe.Node(interface=fsl.ImageMaths(), name='threshold_mode')
+    threshold_mode.inputs.op_string = "-thr 0.1 -uthr 0.99"    
 
     make_termination_mask = pe.Node(interface=fsl.ImageMaths(), name='make_termination_mask')
     make_termination_mask.inputs.op_string = "-bin"
@@ -283,17 +305,18 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
             name='CSDstreamtrack')
 
     #CSDstreamtrack.inputs.desired_number_of_tracks = 10000
+    CSDstreamtrack.inputs.minimum_tract_length = 50
 
     tck2trk = pe.Node(interface=mrtrix.MRTrix2TrackVis(), name='tck2trk')
 
-    extract_PreCoTh_interface = util.Function(input_names=["in_file"],
+    extract_PreCoTh_interface = util.Function(input_names=["in_file", "out_filename"],
                                          output_names=["out_file"],
                                          function=extract_PreCoTh)
     thalamus2precuneus2cortex_ROIs = pe.Node(
         interface=extract_PreCoTh_interface, name='thalamus2precuneus2cortex_ROIs')
 
 
-    wm_mask_interface = util.Function(input_names=["in_file"],
+    wm_mask_interface = util.Function(input_names=["in_file", "out_filename"],
                                          output_names=["out_file"],
                                          function=wm_labels_only)
     make_wm_mask = pe.Node(
@@ -434,8 +457,8 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
         [(fsl2mrtrix, estimateresponse, [("encoding_file", "encoding_file")])])
 
     workflow.connect([(inputnode, csdeconv, [("dwi", "in_file")])])
-    workflow.connect(
-        [(TermMask_to_FA, csdeconv, [("out_file", "mask_image")])])
+    #workflow.connect(
+    #    [(TermMask_to_FA, csdeconv, [("out_file", "mask_image")])])
     workflow.connect(
         [(estimateresponse, csdeconv, [("response", "response_file")])])
     workflow.connect(
@@ -502,7 +525,7 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     return workflow
 
 
-def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True):
+def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True, auto_reorient=True):
     inputnode = pe.Node(
         interface=util.IdentityInterface(fields=["subjects_dir",
                                                  "subject_id",
@@ -525,19 +548,24 @@ def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True):
 
     threshold_FA = pe.Node(interface=fsl.ImageMaths(), name='threshold_FA')
     threshold_FA.inputs.op_string = "-thr 0.8 -uthr 0.99"
+    threshold_mode = pe.Node(interface=fsl.ImageMaths(), name='threshold_mode')
+    threshold_mode.inputs.op_string = "-thr 0.9 -fmedian -fmedian"
 
     make_termination_mask = pe.Node(interface=fsl.ImageMaths(), name='make_termination_mask')
     make_termination_mask.inputs.op_string = "-bin"
 
-    wm_mask_interface = util.Function(input_names=["in_file"],
+    wm_mask_interface = util.Function(input_names=["in_file", "out_filename"],
                                          output_names=["out_file"],
                                          function=wm_labels_only)
-    make_wm_mask = pe.Node(
-        interface=wm_mask_interface, name='make_wm_mask')
+    make_wm_mask = pe.Node(interface=wm_mask_interface, name='make_wm_mask')
 
     MRmultiply = pe.Node(interface=mrtrix.MRMultiply(), name='MRmultiply')
     MRmultiply.inputs.out_filename = "Eroded_FA.nii.gz"
+
+    MultFAbyMode = pe.Node(interface=mrtrix.MRMultiply(), name='MultFAbyMode')
+
     MRmult_merge = pe.Node(interface=util.Merge(2), name='MRmultiply_merge')
+    MultFAbyMode_merge = pe.Node(interface=util.Merge(2), name='MultFAbyMode_merge')
 
     median3d = pe.Node(interface=mrtrix.MedianFilter3D(), name='median3D')
 
@@ -545,21 +573,23 @@ def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True):
         interface=nio.FreeSurferSource(), name='fssource')
     mri_convert_Brain = pe.Node(
         interface=fs.MRIConvert(), name='mri_convert_Brain')
-    mri_convert_Brain.inputs.out_type = 'niigz'
+    mri_convert_Brain.inputs.out_type = 'nii'
     mri_convert_Ribbon = mri_convert_Brain.clone("mri_convert_Ribbon")
     mri_convert_ROIs = mri_convert_Brain.clone("mri_convert_ROIs")
     mri_convert_T1 = mri_convert_Brain.clone("mri_convert_T1")
     
     mni_for_reg = op.join(os.environ["FSL_DIR"],"data","standard","MNI152_T1_1mm.nii.gz")
-    reorientBrain = pe.Node(interface=fsl.FLIRT(dof=6), name = 'reorientBrain')
-    reorientBrain.inputs.reference = mni_for_reg
-    reorientROIs = pe.Node(interface=fsl.ApplyXfm(), name = 'reorientROIs')
-    reorientROIs.inputs.interp = "nearestneighbour"
-    reorientROIs.inputs.reference = mni_for_reg
-    reorientRibbon = reorientROIs.clone("reorientRibbon")
-    reorientRibbon.inputs.interp = "nearestneighbour"
-    reorientT1 = reorientROIs.clone("reorientT1")
-    reorientT1.inputs.interp = "trilinear"
+
+    if auto_reorient:
+        reorientBrain = pe.Node(interface=fsl.FLIRT(dof=6), name = 'reorientBrain')
+        reorientBrain.inputs.reference = mni_for_reg
+        reorientROIs = pe.Node(interface=fsl.ApplyXfm(), name = 'reorientROIs')
+        reorientROIs.inputs.interp = "nearestneighbour"
+        reorientROIs.inputs.reference = mni_for_reg
+        reorientRibbon = reorientROIs.clone("reorientRibbon")
+        reorientRibbon.inputs.interp = "nearestneighbour"
+        reorientT1 = reorientROIs.clone("reorientT1")
+        reorientT1.inputs.interp = "trilinear"
 
     if reg_pet_T1:
         reg_pet_T1 = pe.Node(interface=fsl.FLIRT(dof=6), name = 'reg_pet_T1')
@@ -567,7 +597,7 @@ def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True):
     
     reslice_fdgpet = mri_convert_Brain.clone("reslice_fdgpet")
 
-    extract_PreCoTh_interface = util.Function(input_names=["in_file"],
+    extract_PreCoTh_interface = util.Function(input_names=["in_file", "out_filename"],
                                          output_names=["out_file"],
                                          function=extract_PreCoTh)
     thalamus2precuneus2cortex_ROIs = pe.Node(
@@ -585,34 +615,47 @@ def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True):
     workflow.connect(
         [(FreeSurferSource, mri_convert_T1, [('T1', 'in_file')])])
     workflow.connect(
-        [(mri_convert_T1, reorientT1, [('out_file', 'in_file')])])
-
-    workflow.connect(
         [(FreeSurferSource, mri_convert_Brain, [('brain', 'in_file')])])
-    workflow.connect(
-        [(mri_convert_Brain, reorientBrain, [('out_file', 'in_file')])])
-    workflow.connect(
-        [(reorientBrain, reorientROIs, [('out_matrix_file', 'in_matrix_file')])])
-    workflow.connect(
-        [(reorientBrain, reorientRibbon, [('out_matrix_file', 'in_matrix_file')])])
-    workflow.connect(
-        [(reorientBrain, reorientT1, [('out_matrix_file', 'in_matrix_file')])])
+
+
+    if auto_reorient:
+        workflow.connect(
+            [(mri_convert_T1, reorientT1, [('out_file', 'in_file')])])
+        workflow.connect(
+            [(mri_convert_Brain, reorientBrain, [('out_file', 'in_file')])])
+        workflow.connect(
+            [(reorientBrain, reorientROIs, [('out_matrix_file', 'in_matrix_file')])])
+        workflow.connect(
+            [(reorientBrain, reorientRibbon, [('out_matrix_file', 'in_matrix_file')])])
+        workflow.connect(
+            [(reorientBrain, reorientT1, [('out_matrix_file', 'in_matrix_file')])])
 
     workflow.connect(
         [(FreeSurferSource, mri_convert_ROIs, [(('aparc_aseg', select_aparc), 'in_file')])])
-    workflow.connect(
-        [(mri_convert_ROIs, reorientROIs, [('out_file', 'in_file')])])
-    workflow.connect(
-        [(reorientROIs, make_wm_mask, [('out_file', 'in_file')])])
-    workflow.connect(
-        [(reorientROIs, thalamus2precuneus2cortex_ROIs, [("out_file", "in_file")])])
+    
+    if auto_reorient:
+        workflow.connect(
+            [(mri_convert_ROIs, reorientROIs, [('out_file', 'in_file')])])
+        workflow.connect(
+            [(reorientROIs, make_wm_mask, [('out_file', 'in_file')])])
+        workflow.connect(
+            [(reorientROIs, thalamus2precuneus2cortex_ROIs, [("out_file", "in_file")])])
+    else:
+        workflow.connect(
+            [(mri_convert_ROIs, make_wm_mask, [('out_file', 'in_file')])])
+        workflow.connect(
+            [(mri_convert_ROIs, thalamus2precuneus2cortex_ROIs, [("out_file", "in_file")])])
 
     workflow.connect(
         [(FreeSurferSource, mri_convert_Ribbon, [(('ribbon', select_ribbon), 'in_file')])])
-    workflow.connect(
-        [(mri_convert_Ribbon, reorientRibbon, [('out_file', 'in_file')])])
-    workflow.connect(
-        [(reorientRibbon, make_termination_mask, [('out_file', 'in_file')])])
+    if auto_reorient:
+        workflow.connect(
+            [(mri_convert_Ribbon, reorientRibbon, [('out_file', 'in_file')])])
+        workflow.connect(
+            [(reorientRibbon, make_termination_mask, [('out_file', 'in_file')])])
+    else:
+        workflow.connect(
+            [(mri_convert_Ribbon, make_termination_mask, [('out_file', 'in_file')])])        
 
     workflow.connect(inputnode, 'dwi', nonlinfit_node, 'dwi')
     workflow.connect(inputnode, 'subject_id', nonlinfit_node, 'base_name')
@@ -621,17 +664,28 @@ def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True):
 
     if reg_pet_T1:
         workflow.connect([(inputnode, reg_pet_T1, [("fdgpet", "in_file")])])
-        workflow.connect(
-            [(reorientBrain, reg_pet_T1, [("out_file", "reference")])])
+        if auto_reorient:
+            workflow.connect(
+                [(reorientBrain, reg_pet_T1, [("out_file", "reference")])])
+            workflow.connect(
+                [(reorientROIs, reslice_fdgpet, [("out_file", "reslice_like")])])
+        else:
+            workflow.connect(
+                [(mri_convert_Brain, reg_pet_T1, [("out_file", "reference")])])
+            workflow.connect(
+                [(mri_convert_ROIs, reslice_fdgpet, [("out_file", "reslice_like")])])
+
         workflow.connect(
             [(reg_pet_T1, reslice_fdgpet, [("out_file", "in_file")])])
-        workflow.connect(
-            [(reorientROIs, reslice_fdgpet, [("out_file", "reslice_like")])])
 
     else:
         workflow.connect([(inputnode, reslice_fdgpet, [("fdgpet", "in_file")])])
-        workflow.connect(
-            [(reorientROIs, reslice_fdgpet, [("out_file", "reslice_like")])])
+        if auto_reorient:
+            workflow.connect(
+                [(reorientROIs, reslice_fdgpet, [("out_file", "reslice_like")])])
+        else:
+            workflow.connect(
+                [(mri_convert_ROIs, reslice_fdgpet, [("out_file", "reslice_like")])])
 
     workflow.connect([(nonlinfit_node, median3d, [("binary_mask", "in_file")])])
     workflow.connect(
@@ -644,25 +698,53 @@ def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True):
     workflow.connect([(MRmult_merge, MRmultiply, [("out", "in_files")])])
     workflow.connect([(MRmultiply, threshold_FA, [("out_file", "in_file")])])
 
+    workflow.connect([(nonlinfit_node, threshold_mode, [("mode", "in_file")])])
+    workflow.connect([(threshold_mode, MultFAbyMode_merge, [("out_file", "in1")])])
+    workflow.connect([(threshold_FA, MultFAbyMode_merge, [("out_file", "in2")])])
+    workflow.connect([(MultFAbyMode_merge, MultFAbyMode, [("out", "in_files")])])
+    workflow.connect([(inputnode, MultFAbyMode, [(('subject_id', add_subj_name_to_sfmask), 'out_filename')])])
+
+    workflow.connect([(inputnode, reslice_fdgpet, [(('subject_id', add_subj_name_to_fdgpet), 'out_file')])])
+    workflow.connect([(inputnode, make_wm_mask, [(('subject_id', add_subj_name_to_wmmask), 'out_filename')])])
+    workflow.connect([(inputnode, make_termination_mask, [(('subject_id', add_subj_name_to_termmask), 'out_file')])])
+    workflow.connect([(inputnode, thalamus2precuneus2cortex_ROIs, [(('subject_id', add_subj_name_to_rois), 'out_filename')])])
+    if auto_reorient:
+        workflow.connect([(inputnode, reorientT1, [(('subject_id', add_subj_name_to_T1), 'out_file')])])
+        workflow.connect([(inputnode, reorientBrain, [(('subject_id', add_subj_name_to_T1brain), 'out_file')])])
+    else:
+        workflow.connect([(inputnode, mri_convert_T1, [(('subject_id', add_subj_name_to_T1), 'out_file')])])
+        workflow.connect([(inputnode, mri_convert_Brain, [(('subject_id', add_subj_name_to_T1brain), 'out_file')])])
+
+
     output_fields = ["single_fiber_mask", "fa", "rgb_fa", "md", "t1", "t1_brain",
-    "wm_mask", "term_mask", "fdgpet", "rois"]
+    "wm_mask", "term_mask", "fdgpet", "rois","mode"]
 
     outputnode = pe.Node(
         interface=util.IdentityInterface(fields=output_fields),
         name="outputnode")
 
     workflow.connect([
-         (reorientBrain, outputnode, [("out_file", "t1_brain")]),
-         (reorientT1, outputnode, [("out_file", "t1")]),
          (nonlinfit_node, outputnode, [("FA", "fa")]),
          (nonlinfit_node, outputnode, [("rgb_fa", "rgb_fa")]),
          (nonlinfit_node, outputnode, [("MD", "md")]),
-         (threshold_FA, outputnode, [("out_file", "single_fiber_mask")]),
+         (nonlinfit_node, outputnode, [("mode", "mode")]),
+         (MultFAbyMode, outputnode, [("out_file", "single_fiber_mask")]),
          (make_wm_mask, outputnode, [("out_file", "wm_mask")]),
          (make_termination_mask, outputnode, [("out_file", "term_mask")]),
          (reslice_fdgpet, outputnode, [("out_file", "fdgpet")]),
          (thalamus2precuneus2cortex_ROIs, outputnode, [("out_file", "rois")]),
          ])
+
+    if auto_reorient:
+        workflow.connect([
+            (reorientBrain, outputnode, [("out_file", "t1_brain")]),
+            (reorientT1, outputnode, [("out_file", "t1")]),
+            ])
+    else:
+        workflow.connect([
+            (mri_convert_Brain, outputnode, [("out_file", "t1_brain")]),
+            (mri_convert_T1, outputnode, [("out_file", "t1")]),
+            ])
     return workflow
 
 
@@ -725,6 +807,8 @@ def create_precoth_pipeline_step2(name="precoth_step2", tractography_type='proba
             interface=mrtrix.SphericallyDeconvolutedStreamlineTrack(),
             name='CSDstreamtrack')
 
+    CSDstreamtrack.inputs.minimum_tract_length = 50
+
     CSDstreamtrack.inputs.desired_number_of_tracks = 10000
 
     tck2trk = pe.Node(interface=mrtrix.MRTrix2TrackVis(), name='tck2trk')
@@ -779,8 +863,8 @@ def create_precoth_pipeline_step2(name="precoth_step2", tractography_type='proba
         [(fsl2mrtrix, estimateresponse, [("encoding_file", "encoding_file")])])
 
     workflow.connect([(inputnode, csdeconv, [("dwi", "in_file")])])
-    workflow.connect(
-        [(TermMask_to_FA, csdeconv, [("out_file", "mask_image")])])
+    #workflow.connect(
+    #    [(TermMask_to_FA, csdeconv, [("out_file", "mask_image")])])
     workflow.connect(
         [(estimateresponse, csdeconv, [("response", "response_file")])])
     workflow.connect(
@@ -815,7 +899,7 @@ def create_precoth_pipeline_step2(name="precoth_step2", tractography_type='proba
 
     output_fields = ["csdeconv", "tracts_tck", "summary", "filtered_tractographies",
         "matrix_file", "connectome", "CMR_nodes", "fiber_labels_noorphans", "fiber_length_file",
-        "fiber_label_file", "fa_t1space"]
+        "fiber_label_file", "fa_t1space","mode"]
 
     outputnode = pe.Node(
         interface=util.IdentityInterface(fields=output_fields),
