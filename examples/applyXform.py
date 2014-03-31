@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import os, sys
 import string
 
@@ -5,7 +6,7 @@ def applyXform(in_file, in_matrix):
     import os.path as op
     from nipype.utils.filemanip import split_filename
     _, name, _ = split_filename(in_file)
-    out_basename = name + "reorient"
+    out_basename = name + "_reorient"
     print("Applying transformation")
     import nipype.interfaces.spm.utils as spmu
     applymat = spmu.ApplyTransform()
