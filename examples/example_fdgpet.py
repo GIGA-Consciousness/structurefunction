@@ -12,7 +12,7 @@ data_path = sample.data_path()
 subjects_dir = op.join(data_path,"subjects")
 output_dir = op.abspath('fdgpet')
 
-info = dict(fdg_pet_image=[['subject_id', '*fswp*']],)
+info = dict(fdg_pet_image=[['subject_id', 'fswp*']],)
 
 subject_list = ['Bend1']
 
@@ -25,7 +25,7 @@ datasource = pe.Node(interface=nio.DataGrabber(infields=['subject_id'],
 
 datasource.inputs.template = "%s/%s"
 datasource.inputs.base_directory = data_path
-datasource.inputs.field_template = dict(fdg_pet_image='data/%s/%s.nii')
+datasource.inputs.field_template = dict(fdg_pet_image='data/%s/%s.nii.gz')
 datasource.inputs.template_args = info
 datasource.inputs.sort_filelist = True
 

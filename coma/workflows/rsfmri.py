@@ -22,7 +22,7 @@ def create_rsfmri_correlation_network(name="functional", have_nodes_already=Fals
     # Define the correlation mapping node, the CFF Converter, and NetworkX
     # MATLAB -> CommaSeparatedValue node
     time_course_correlation = pe.Node(
-        interface=cmtk.SimpleTimeCourseCorrelationGraph(), name='time_course_correlation')
+        interface=ci.SimpleTimeCourseCorrelationGraph(), name='time_course_correlation')
     correlationCFFConverter = pe.Node(
         interface=cmtk.CFFConverter(), name="correlationCFFConverter")
     correlationCFFConverter.inputs.out_file = 'correlation.cff'

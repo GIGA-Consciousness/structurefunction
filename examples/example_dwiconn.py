@@ -7,6 +7,11 @@ from coma.workflows.dti import create_connectivity_pipeline
 from coma.datasets import sample
 data_path = sample.data_path()
 
+import cmp
+parcellation_name = 'scale500'
+cmp_config = cmp.configuration.PipelineConfiguration()
+cmp_config.parcellation_scheme = "Lausanne2008"
+
 subjects_dir = op.join(data_path,"subjects")
 output_dir = op.abspath('dwi_connectome')
 
@@ -16,10 +21,11 @@ info = dict(dwi=[['subject_id', 'dwi']],
 
 subject_list = ['Bend1']
 
-infosource = pe.Node(interface=util.IdentityInterface(fields=['subject_id']),
+infosource = pe.Node(interface=util.IdentityInterface(fields=['subject_id', 'subjects_dir']),
                      name="infosource")
 
 infosource.iterables = ('subject_id', subject_list)
+infosource.inputs.subjects_dir = subjects_dir
 datasource = pe.Node(interface=nio.DataGrabber(infields=['subject_id'],
                                                outfields=info.keys()),
                      name='datasource')
@@ -31,8 +37,7 @@ datasource.inputs.template_args = info
 datasource.inputs.sort_filelist = True
 
 structural = create_connectivity_pipeline("structural")
-#structural.inputnode.inputs.resolution_network_file = 
-structural.inputs.inputnode.subjects_dir = subjects_dir
+structural.inputs.mapping.inputnode_within.resolution_network_file = cmp_config._get_lausanne_parcellation('Lausanne2008')[parcellation_name]['node_information_graphml']
 
 # It's recommended to use low max harmonic order in damaged brains
 lmax = 6
@@ -52,6 +57,7 @@ workflow.connect([(infosource, datasource, [('subject_id', 'subject_id')])])
 workflow.connect([(infosource, datasink, [('subject_id', '@subject_id')])])
 
 workflow.connect([(infosource, structural, [('subject_id', 'inputnode.subject_id')])])
+workflow.connect([(infosource, structural, [('subjects_dir', 'inputnode.subjects_dir')])])
 workflow.connect([(datasource, structural, [('dwi', 'inputnode.dwi')])])
 workflow.connect([(datasource, structural, [('bvecs', 'inputnode.bvecs')])])
 workflow.connect([(datasource, structural, [('bvals', 'inputnode.bvals')])])
