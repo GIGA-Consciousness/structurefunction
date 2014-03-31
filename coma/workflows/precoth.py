@@ -99,11 +99,16 @@ def summarize_precoth(dwi_network_file, fdg_stats_file, subject_id):
     all_data = f_avg + f_max + f_min + f_std
     all_data = all_data + l_th + r_th + l_cor + r_cor + l_prec
 
+    volume_titles = ["VoxLTh","VoxRTh","VoxLCo", "VoxRCo", "VoxLPre", "VoxRPre"]
+    all_titles = all_titles + volume_titles
+    volumes = fdg["number_of_voxels"]
+    all_data = all_data + volumes
+
     out_file = op.abspath(subject_id + "_precoth.csv")
     f = open(out_file, "w")
     title_str = ",".join(all_titles) + "\n"
     f.write(title_str)
-    all_data = map(float ,all_data)
+    all_data = map(float, all_data)
     data_str = subject_id + "," + ",".join(format(x, "10.5f") for x in all_data) + "\n"
     f.write(data_str)
     f.close()
@@ -446,7 +451,7 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
         [(TermMask_to_FA, CSDstreamtrack, [("out_file", "mask_file")])])
     workflow.connect(
         [(csdeconv, CSDstreamtrack, [("spherical_harmonics_image", "in_file")])])
-
+    
     workflow.connect([(CSDstreamtrack, tck2trk, [("tracked", "in_file")])])
 
     workflow.connect(
