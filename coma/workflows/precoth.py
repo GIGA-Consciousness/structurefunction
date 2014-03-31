@@ -337,12 +337,14 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     mri_convert_Brain = pe.Node(
         interface=fs.MRIConvert(), name='mri_convert_Brain')
     mri_convert_Brain.inputs.out_type = 'niigz'
+    mri_convert_Brain.inputs.no_change = True
 
     if reg_pet_T1:
         reg_pet_T1 = pe.Node(interface=fsl.FLIRT(dof=6), name = 'reg_pet_T1')
         reg_pet_T1.inputs.cost = ('corratio')
     
     reslice_fdgpet = mri_convert_Brain.clone("reslice_fdgpet")
+    reslice_fdgpet.inputs.no_change = True
 
     mri_convert_Ribbon = mri_convert_Brain.clone("mri_convert_Ribbon")
     mri_convert_ROIs = mri_convert_Brain.clone("mri_convert_ROIs")
@@ -574,6 +576,8 @@ def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True, auto_re
     mri_convert_Brain = pe.Node(
         interface=fs.MRIConvert(), name='mri_convert_Brain')
     mri_convert_Brain.inputs.out_type = 'nii'
+    mri_convert_Brain.inputs.no_change = True
+    
     mri_convert_Ribbon = mri_convert_Brain.clone("mri_convert_Ribbon")
     mri_convert_ROIs = mri_convert_Brain.clone("mri_convert_ROIs")
     mri_convert_T1 = mri_convert_Brain.clone("mri_convert_T1")
@@ -596,6 +600,7 @@ def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True, auto_re
         reg_pet_T1.inputs.cost = ('corratio')
     
     reslice_fdgpet = mri_convert_Brain.clone("reslice_fdgpet")
+    reslice_fdgpet.inputs.no_change = True
 
     extract_PreCoTh_interface = util.Function(input_names=["in_file", "out_filename"],
                                          output_names=["out_file"],
