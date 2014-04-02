@@ -34,6 +34,20 @@ def add_subj_name_to_T1(subject_id):
 def add_subj_name_to_rois(subject_id):
     return subject_id + "_PreCoTh_rois.nii"
 
+def select_CSF(tissue_class_files):
+    CSF = None
+    for in_file in tissue_class_files:
+        if in_file.rfind("_seg_0") > 0:
+            CSF = in_file
+    return CSF
+
+def select_WM(tissue_class_files):
+    WM = None
+    for in_file in tissue_class_files:
+        if in_file.rfind("_seg_2") > 0:
+            WM = in_file
+    return WM
+
 
 def return_subject_data(subject_id, data_file):
     import csv
@@ -561,6 +575,15 @@ def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True, auto_re
     make_termination_mask = pe.Node(interface=fsl.ImageMaths(), name='make_termination_mask')
     make_termination_mask.inputs.op_string = "-bin"
 
+    fast_seg_T1 = pe.Node(interface=fsl.FAST(), name='fast_seg_T1')
+    fast_seg_T1.inputs.segments = True
+
+    fix_wm_mask = pe.Node(interface=fsl.MultiImageMaths(), name='fix_wm_mask')
+    fix_wm_mask.inputs.op_string = "-mul %s"
+
+    fix_termination_mask = pe.Node(interface=fsl.MultiImageMaths(), name='fix_termination_mask')
+    fix_termination_mask.inputs.op_string = "-binv -mul %s"
+
     wm_mask_interface = util.Function(input_names=["in_file", "out_filename"],
                                          output_names=["out_file"],
                                          function=wm_labels_only)
@@ -667,6 +690,22 @@ def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True, auto_re
         workflow.connect(
             [(mri_convert_Ribbon, make_termination_mask, [('out_file', 'in_file')])])        
 
+    if auto_reorient:
+        workflow.connect(
+            [(reorientBrain, fast_seg_T1, [('out_file', 'in_files')])])
+    else:
+        workflow.connect(
+            [(mri_convert_Brain, fast_seg_T1, [('out_file', 'in_files')])])
+
+
+    workflow.connect([(fast_seg_T1, fix_termination_mask, [(('tissue_class_files', select_CSF), 'in_file')])])
+    workflow.connect([(fast_seg_T1, fix_wm_mask, [(('tissue_class_files', select_WM), 'in_file')])])
+
+    workflow.connect(
+        [(make_termination_mask, fix_termination_mask, [('out_file', 'operand_files')])])
+    workflow.connect(
+        [(make_wm_mask, fix_wm_mask, [('out_file', 'operand_files')])])
+
     workflow.connect(inputnode, 'dwi', nonlinfit_node, 'dwi')
     workflow.connect(inputnode, 'subject_id', nonlinfit_node, 'base_name')
     workflow.connect(inputnode, 'bvecs', nonlinfit_node, 'bvecs')
@@ -716,7 +755,8 @@ def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True, auto_re
 
     workflow.connect([(inputnode, reslice_fdgpet, [(('subject_id', add_subj_name_to_fdgpet), 'out_file')])])
     workflow.connect([(inputnode, make_wm_mask, [(('subject_id', add_subj_name_to_wmmask), 'out_filename')])])
-    workflow.connect([(inputnode, make_termination_mask, [(('subject_id', add_subj_name_to_termmask), 'out_file')])])
+    workflow.connect([(inputnode, fix_wm_mask, [(('subject_id', add_subj_name_to_wmmask), 'out_file')])])
+    workflow.connect([(inputnode, fix_termination_mask, [(('subject_id', add_subj_name_to_termmask), 'out_file')])])
     workflow.connect([(inputnode, thalamus2precuneus2cortex_ROIs, [(('subject_id', add_subj_name_to_rois), 'out_filename')])])
     if auto_reorient:
         workflow.connect([(inputnode, reorientT1, [(('subject_id', add_subj_name_to_T1), 'out_file')])])
@@ -739,8 +779,8 @@ def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True, auto_re
          (nonlinfit_node, outputnode, [("MD", "md")]),
          (nonlinfit_node, outputnode, [("mode", "mode")]),
          (MultFAbyMode, outputnode, [("out_file", "single_fiber_mask")]),
-         (make_wm_mask, outputnode, [("out_file", "wm_mask")]),
-         (make_termination_mask, outputnode, [("out_file", "term_mask")]),
+         (fix_wm_mask, outputnode, [("out_file", "wm_mask")]),
+         (fix_termination_mask, outputnode, [("out_file", "term_mask")]),
          (reslice_fdgpet, outputnode, [("out_file", "fdgpet")]),
          (thalamus2precuneus2cortex_ROIs, outputnode, [("out_file", "rois")]),
          ])
