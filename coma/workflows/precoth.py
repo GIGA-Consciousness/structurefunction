@@ -115,7 +115,7 @@ def summarize_precoth(dwi_network_file, fdg_stats_file, subject_id):
 
     fdg_titles = fdg_avg + fdg_max + fdg_min + fdg_std
 
-    dwi = nx.to_numpy_matrix(dwi_ntwk, weight="number_of_fibers")
+    dwi = nx.to_numpy_matrix(dwi_ntwk, weight="weight")
 
     l_thal = ["LTh_RTh","LTh_LCo","LTh_RCo","LTh_LPre","LTh_RPre"]
     l_th   = [dwi[0,1], dwi[0,2], dwi[0,3], dwi[0,4], dwi[0,5]]
@@ -130,13 +130,11 @@ def summarize_precoth(dwi_network_file, fdg_stats_file, subject_id):
     conn_titles = l_thal + r_thal + l_co + r_co + l_pre
 
     all_titles = titles + fdg_titles + conn_titles
-    all_data = f_avg + f_max + f_min + f_std
-    all_data = all_data + l_th + r_th + l_cor + r_cor + l_prec
-
     volume_titles = ["VoxLTh","VoxRTh","VoxLCo", "VoxRCo", "VoxLPre", "VoxRPre"]
     all_titles = all_titles + volume_titles
     volumes = fdg["number_of_voxels"]
-    all_data = all_data + volumes
+
+    all_data = f_avg + f_max + f_min + f_std + l_th + r_th + l_cor + r_cor + l_prec + volumes[:,0].tolist()
 
     out_file = op.abspath(subject_id + "_precoth.csv")
     f = open(out_file, "w")
@@ -512,12 +510,12 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     workflow.connect(
         [(fdgpet_regions, write_csv_data, [("stats_file", "fdg_stats_file")])])
     workflow.connect(
-        [(thalamus2precuneus2cortex, write_csv_data, [("matrix_file", "dwi_network_file")])])
+        [(thalamus2precuneus2cortex, write_csv_data, [("intersection_matrix_file", "dwi_network_file")])])
 
     output_fields = ["fa", "rgb_fa", "md", "csdeconv", "tracts_tck", "rois", "t1",
         "t1_brain", "wmmask_dtispace", "fa_t1space", "summary", "filtered_tractographies",
         "matrix_file", "connectome", "CMR_nodes", "fiber_labels_noorphans", "fiber_length_file",
-        "fiber_label_file"]
+        "fiber_label_file", "intersection_matrix_mat_file"]
 
     outputnode = pe.Node(
         interface=util.IdentityInterface(fields=output_fields),
@@ -537,6 +535,7 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
          (thalamus2precuneus2cortex, outputnode, [("fiber_labels_noorphans", "fiber_labels_noorphans")]),
          (thalamus2precuneus2cortex, outputnode, [("fiber_length_file", "fiber_length_file")]),
          (thalamus2precuneus2cortex, outputnode, [("fiber_label_file", "fiber_label_file")]),
+         (thalamus2precuneus2cortex, outputnode, [("intersection_matrix_mat_file", "intersection_matrix_mat_file")]),
          (fdgpet_regions, outputnode, [("networks", "CMR_nodes")]),
          (nonlinfit_node, outputnode, [("rgb_fa", "rgb_fa")]),
          (nonlinfit_node, outputnode, [("MD", "md")]),
@@ -800,7 +799,7 @@ def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True, auto_re
 
 
 
-def create_precoth_pipeline_step2(name="precoth_step2", tractography_type='probabilistic', reg_pet_T1=True):
+def create_precoth_pipeline_step2(name="precoth_step2", tractography_type='probabilistic'):
     inputnode = pe.Node(
         interface=util.IdentityInterface(fields=["subjects_dir",
                                                  "subject_id",
@@ -815,7 +814,10 @@ def create_precoth_pipeline_step2(name="precoth_step2", tractography_type='proba
                                                  "scan_time",
                                                  "single_fiber_mask",
                                                  "fa",
+                                                 "rgb_fa",
+                                                 "md",
                                                  "t1_brain",
+                                                 "t1",
                                                  "wm_mask",
                                                  "term_mask",
                                                  "rois",
@@ -831,6 +833,11 @@ def create_precoth_pipeline_step2(name="precoth_step2", tractography_type='proba
     WM_to_FA = pe.Node(interface=fsl.ApplyXfm(), name = 'WM_to_FA')
     WM_to_FA.inputs.interp = 'nearestneighbour'
     TermMask_to_FA = WM_to_FA.clone("TermMask_to_FA")
+
+    rgb_fa_t1space = pe.Node(interface=fsl.ApplyXfm(), name = 'rgb_fa_t1space')
+    md_to_T1 = pe.Node(interface=fsl.ApplyXfm(), name = 'md_to_T1')
+
+    t1_dtispace = pe.Node(interface=fsl.ApplyXfm(), name = 't1_dtispace')
 
     fsl2mrtrix = pe.Node(interface=mrtrix.FSL2MRTrix(), name='fsl2mrtrix')
     fsl2mrtrix.inputs.invert_y = True
@@ -898,6 +905,19 @@ def create_precoth_pipeline_step2(name="precoth_step2", tractography_type='proba
     workflow.connect([(coregister, tck2trk,[("out_matrix_file","matrix_file")])])
     
     workflow.connect([(coregister, invertxfm,[("out_matrix_file","in_file")])])
+
+    workflow.connect([(inputnode, t1_dtispace,[("t1","in_file")])])
+    workflow.connect([(invertxfm, t1_dtispace,[("out_file","in_matrix_file")])])
+    workflow.connect([(inputnode, t1_dtispace,[("fa","reference")])])
+
+    workflow.connect([(inputnode, rgb_fa_t1space,[("rgb_fa","in_file")])])
+    workflow.connect([(coregister, rgb_fa_t1space,[("out_matrix_file","in_matrix_file")])])
+    workflow.connect([(inputnode, rgb_fa_t1space,[('wm_mask','reference')])])
+
+    workflow.connect([(inputnode, md_to_T1,[("md","in_file")])])
+    workflow.connect([(coregister, md_to_T1,[("out_matrix_file","in_matrix_file")])])
+    workflow.connect([(inputnode, md_to_T1,[('wm_mask','reference')])])
+
     workflow.connect([(invertxfm, WM_to_FA,[("out_file","in_matrix_file")])])
     workflow.connect([(inputnode, WM_to_FA,[("wm_mask","in_file")])])
     workflow.connect([(inputnode, WM_to_FA,[("fa","reference")])])
@@ -938,18 +958,19 @@ def create_precoth_pipeline_step2(name="precoth_step2", tractography_type='proba
     workflow.connect(
         [(inputnode, thalamus2precuneus2cortex, [("rois", "roi_file")])])
     workflow.connect(
-        [(thalamus2precuneus2cortex, fdgpet_regions, [("matrix_file", "resolution_network_file")])])
+        [(thalamus2precuneus2cortex, fdgpet_regions, [("intersection_matrix_file", "resolution_network_file")])])
 
     workflow.connect(
         [(inputnode, write_csv_data, [("subject_id", "subject_id")])])
     workflow.connect(
         [(fdgpet_regions, write_csv_data, [("stats_file", "fdg_stats_file")])])
     workflow.connect(
-        [(thalamus2precuneus2cortex, write_csv_data, [("matrix_file", "dwi_network_file")])])
+        [(thalamus2precuneus2cortex, write_csv_data, [("intersection_matrix_file", "dwi_network_file")])])
 
     output_fields = ["csdeconv", "tracts_tck", "summary", "filtered_tractographies",
-        "matrix_file", "connectome", "CMR_nodes", "fiber_labels_noorphans", "fiber_length_file",
-        "fiber_label_file", "fa_t1space","mode"]
+        "matrix_file", "connectome", "CMR_nodes", "cmr_glucose", "fiber_labels_noorphans", "fiber_length_file",
+        "fiber_label_file", "fa_t1space", "rgb_fa_t1space", "md_t1space", "fa_t1xform", "t1_dtispace",
+        "intersection_matrix_mat_file", "dti_stats"]
 
     outputnode = pe.Node(
         interface=util.IdentityInterface(fields=output_fields),
@@ -960,13 +981,20 @@ def create_precoth_pipeline_step2(name="precoth_step2", tractography_type='proba
          (csdeconv, outputnode,
           [("spherical_harmonics_image", "csdeconv")]),
          (coregister, outputnode, [("out_file", "fa_t1space")]),
+         (rgb_fa_t1space, outputnode, [("out_file", "rgb_fa_t1space")]),
+         (md_to_T1, outputnode, [("out_file", "md_t1space")]),
+         (t1_dtispace, outputnode, [("out_file", "t1_dtispace")]),
+         (coregister, outputnode, [("out_matrix_file", "fa_t1xform")]),
          (thalamus2precuneus2cortex, outputnode, [("filtered_tractographies", "filtered_tractographies")]),
          (thalamus2precuneus2cortex, outputnode, [("matrix_file", "connectome")]),
          (thalamus2precuneus2cortex, outputnode, [("fiber_labels_noorphans", "fiber_labels_noorphans")]),
          (thalamus2precuneus2cortex, outputnode, [("fiber_length_file", "fiber_length_file")]),
          (thalamus2precuneus2cortex, outputnode, [("fiber_label_file", "fiber_label_file")]),
+         (thalamus2precuneus2cortex, outputnode, [("intersection_matrix_mat_file", "intersection_matrix_mat_file")]),
+         (thalamus2precuneus2cortex, outputnode, [("stats_file", "dti_stats")]),
          (fdgpet_regions, outputnode, [("networks", "CMR_nodes")]),
          (write_csv_data, outputnode, [("out_file", "summary")]),
+         (compute_cmr_glc, outputnode, [("out_file", "cmr_glucose")]),
          ])
 
     return workflow
