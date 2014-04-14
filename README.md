@@ -34,7 +34,19 @@ Installation
 
         git submodule update --init --recursive
 
+Python Dependencies
+------------
 
+1. MNE-Python (https://github.com/mne-tools/mne-python, just for file fetching utils)
+    
+        pip install mne
+
+2. ConnectomeMapper (https://github.com/LTS5/cmp)
+
+        git clone https://github.com/LTS5/cmp.git
+        cd cmp
+        git checkout 78608e986634341c1a0cb08ed0b7ea8a632307e3
+        python setup.py install
 
 
 Interface Example
