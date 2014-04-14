@@ -25,6 +25,8 @@ Installation
     
         setenv COMA_REST_LIB_ROOT /path/to/structurefunction/RestLib
         setenv COMA_DIR /path/to/structurefunction
+        
+   These should not actually say /path/to, but should describe the path ON YOUR COMPUTER to the files in question. E.g. it could be something like /home/erik/structurefunction on Linux or /Users/erik/structurefunction on a Mac. 
 
 4. Make sure the RestLib is in your MATLAB path.
 
