@@ -25,6 +25,8 @@ Installation
     
         setenv COMA_REST_LIB_ROOT /path/to/structurefunction/RestLib
         setenv COMA_DIR /path/to/structurefunction
+        
+   These should not actually say /path/to, but should describe the path ON YOUR COMPUTER to the files in question. E.g. it could be something like /home/erik/structurefunction on Linux or /Users/erik/structurefunction on a Mac. 
 
 4. Make sure the RestLib is in your MATLAB path.
 
@@ -32,7 +34,19 @@ Installation
 
         git submodule update --init --recursive
 
+Python Dependencies
+------------
 
+1. MNE-Python (https://github.com/mne-tools/mne-python, just for file fetching utils)
+    
+        pip install mne
+
+2. ConnectomeMapper (https://github.com/LTS5/cmp)
+
+        git clone https://github.com/LTS5/cmp.git
+        cd cmp
+        git checkout 78608e986634341c1a0cb08ed0b7ea8a632307e3
+        python setup.py install
 
 
 Interface Example
