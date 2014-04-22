@@ -84,12 +84,11 @@ def write_trackvis_scene(track_file, n_clusters=1, skip=80, out_file = "NewScene
     f.write('</Comment>\n')
 
     # Define the scene dimensions
-    x = 182
-    y = 218
-    z = 182
-    vx = 1
-    vy = 1
-    vz = 1
+    import nibabel.trackvis as trk
+    _, hdr = trk.read(track_file)
+    x, y, z = hdr['dim']
+    vx, vy, vz = hdr['voxel_size']
+
     f.write('<Scene version="2.2">\n')
     f.write('    <Dimension x="%d" y="%d" z="%d" />\n' % (x, y, z))
     f.write('    <VoxelSize x="%f" y="%f" z="%f" />\n' % (vx, vy, vz))
