@@ -66,7 +66,7 @@ def hsv_to_rgb(h, s, v):
     elif hi == 5:
         return v, p, q
 
-def write_trackvis_scene(track_file, n_clusters=1, out_file = "NewScene.scene"):
+def write_trackvis_scene(track_file, n_clusters=1, skip=80, out_file = "NewScene.scene"):
     from random import randint, uniform
     bg_r, bg_g, bg_b = 0, 0, 0
     f = open(out_file, 'w')
@@ -96,7 +96,6 @@ def write_trackvis_scene(track_file, n_clusters=1, out_file = "NewScene.scene"):
     f.write('    <VoxelOrder current="LPS" original="LAS" />\n')
     f.write('    <LengthUnit value="0" />\n')
 
-    track_file = "/Code/structurefunction/examples/Qb_merge.trk"
     from nipype.utils.filemanip import split_filename
     _, name, ext = split_filename(track_file)
     rpath = name + ext
@@ -127,7 +126,7 @@ def write_trackvis_scene(track_file, n_clusters=1, out_file = "NewScene.scene"):
         f.write('            <Slice plane="0" number="91" thickness="1" testmode="0" enable="0" visible="1" operator="and" id="1925142528"/>\n')
         f.write('            <Slice plane="1" number="109" thickness="1" testmode="0" enable="0" visible="1" operator="and" id="1881842394"/>\n')
         f.write('            <Slice plane="2" number="91" thickness="1" testmode="0" enable="0" visible="1" operator="and" id="2133446589"/>\n')
-        f.write('            <Skip value="10" enable="1" />\n')
+        f.write('            <Skip value="%f" enable="1" />\n' % skip)
         f.write('            <ShadingMode value="0" />\n')
         f.write('            <Radius value="0.05" />\n')
         f.write('            <NumberOfSides value="5" />\n')
@@ -174,14 +173,14 @@ def write_trackvis_scene(track_file, n_clusters=1, out_file = "NewScene.scene"):
 
     return out_file
 
-def bundle_tracks(in_file):
+def bundle_tracks(in_file, dist_thr=40., pts = 16, skip=80.):
     import os
     import os.path as op
     from nibabel import trackvis as tv
     from dipy.segment.quickbundles import QuickBundles
     streams, hdr = tv.read(in_file)
     streamlines = [i[0] for i in streams]
-    qb = QuickBundles(streamlines, dist_thr=20., pts = 16)
+    qb = QuickBundles(streamlines, float(dist_thr), int(pts))
     clusters = qb.clustering
     #scalars = [i[0] for i in streams]
 
@@ -211,7 +210,7 @@ def bundle_tracks(in_file):
     print(clust_str)
 
     os.system("track_merge %s %s" % (clust_str, out_merged_file))
-    out_scene_file = write_trackvis_scene(out_merged_file, n_clusters=len(clusters), out_file = "NewScene.scene")
+    out_scene_file = write_trackvis_scene(out_merged_file, n_clusters=len(clusters), skip=skip, out_file = "NewScene.scene")
     print("Merged track file written to %s" % out_merged_file)
     print("Scene file written to %s" % out_scene_file)
     return out_files, out_merged_file, out_scene_file
