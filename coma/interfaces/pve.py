@@ -70,13 +70,18 @@ class PartialVolumeCorrectionInputSpec(BaseInterfaceInputSpec):
         desc='Uses the WM/GM/CSF segmentation instead of an atlas')
     use_fs_LUT = traits.Bool(True, usedefault=True,
         desc='Uses the Freesurfer lookup table for names in the atlas')
-    out_neuronal_image = File('neuronal.nii', usedefault=True,
-                              desc='Reconstructed "denoised" image from neuronal components')
-    out_non_neuronal_image = File('non_neuronal.nii', usedefault=True,
-                                  desc='Reconstructed "noise" image from non-neuronal components')
-
 
 class PartialVolumeCorrectionOutputSpec(TraitedSpec):
+    alfano_alfano = File(
+        exists=True, desc='alfano_alfano')
+    alfano_cs = File(
+        exists=True, desc='alfano_cs')
+    alfano_rousset = File(
+        exists=True, desc='alfano_rousset')
+    mueller_gartner_alfano = File(
+        exists=True, desc='mueller_gartner_alfano')
+    mask = File(
+        exists=True, desc='mask')
     occu_mueller_gartner = File(
         exists=True, desc='occu_mueller_gartner')
     occu_meltzer = File(
@@ -164,6 +169,16 @@ class PartialVolumeCorrection(BaseInterface):
         analyze_to_nifti(virtual_PET_img)
         centrum_semiovalue_WM_img = glob.glob("r_volume_CSWMROI.img")[0]
         analyze_to_nifti(centrum_semiovalue_WM_img)
+        alfano_alfano_img = glob.glob("r_volume_AlfanoAlfano.img")[0]
+        analyze_to_nifti(alfano_alfano_img)
+        alfano_cs_img = glob.glob("r_volume_AlfanoCS.img")[0]
+        analyze_to_nifti(alfano_cs_img)
+        alfano_rousset_img = glob.glob("r_volume_AlfanoRousset.img")[0]
+        analyze_to_nifti(alfano_rousset_img)
+        mg_alfano_img = glob.glob("r_volume_MGAlfano.img")[0]
+        analyze_to_nifti(mg_alfano_img)
+        mask_img = glob.glob("r_volume_Mask.img")[0]
+        analyze_to_nifti(mask_img)
         PSF_img = glob.glob("r_volume_PSF.img")[0]
         analyze_to_nifti(PSF_img)
         return result.runtime
@@ -179,4 +194,9 @@ class PartialVolumeCorrection(BaseInterface):
         outputs['white_matter_roi'] = op.abspath("r_volume_CSWMROI.nii")
         outputs['rousset_mat_file'] = op.abspath("r_volume_Rousset.mat")
         outputs['point_spread_image'] = op.abspath("r_volume_PSF.nii")
+        outputs['mask'] = op.abspath("r_volume_Mask.nii")
+        outputs['alfano_alfano'] = op.abspath("r_volume_AlfanoAlfano.nii")
+        outputs['alfano_cs'] = op.abspath("r_volume_AlfanoCS.nii")
+        outputs['alfano_rousset'] = op.abspath("r_volume_AlfanoRousset.nii")
+        outputs['mueller_gartner_alfano'] = op.abspath("r_volume_MGAlfano.nii")
         return outputs
