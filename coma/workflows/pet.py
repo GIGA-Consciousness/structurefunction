@@ -22,8 +22,8 @@ def create_pet_quantification_wf(name="petquant"):
         name="inputnode")
 
 
-    coregister = pe.Node(interface=fsl.FLIRT(dof=12), name = 'coregister')
-    coregister.inputs.cost = ('mutualinfo')
+    coregister = pe.Node(interface=fsl.FLIRT(dof=6), name = 'coregister')
+    coregister.inputs.cost = ('corratio')
     coregister.inputs.interp = 'trilinear'
 
     convertxfm = pe.Node(interface=fsl.ConvertXFM(), name = 'convertxfm')
