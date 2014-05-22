@@ -34,13 +34,18 @@ def nifti_to_analyze(nii):
     return op.abspath(name + '.img'), op.abspath(name + '.hdr')
 
 
-def analyze_to_nifti(img, ext='.nii.gz'):
+def analyze_to_nifti(img, ext='.nii.gz', affine=None):
     image = nb.load(img)
-    nii = nb.Nifti1Image.from_image(image)
     _, name, _ = split_filename(img)
-    affine = image.get_affine()
-    nii.set_sform(affine)
-    nii.set_qform(affine)
+    if affine is None:
+        nii = nb.Nifti1Image.from_image(image)
+        affine = image.get_affine()
+        nii.set_sform(affine)
+        nii.set_qform(affine)
+    else:
+        nii = nb.Nifti1Image(dataobj=image.get_data(),
+            header=image.get_header(), affine=affine)
+
     nb.save(nii, op.abspath(name + ext))
     return op.abspath(name + ext)
 
@@ -186,6 +191,9 @@ class PartialVolumeCorrection(BaseInterface):
         f = open(list_path, 'w')
         f.write("%s;%s" % (pet_path, t1_path))
         f.close()
+        
+        orig_t1 = nb.load(self.inputs.t1_file)
+        orig_affine = orig_t1.get_affine()
 
         gm_uint8 = switch_datatype(self.inputs.grey_matter_file)
         gm_path, _ = nifti_to_analyze(gm_uint8)
@@ -229,29 +237,29 @@ class PartialVolumeCorrection(BaseInterface):
 
         _, foldername, _ = split_filename(self.inputs.pet_file)
         occu_MG_img = glob.glob("pve_%s/r_volume_Occu_MG.img" % foldername)[0] 
-        analyze_to_nifti(occu_MG_img)
+        analyze_to_nifti(occu_MG_img, affine=orig_affine)
         occu_meltzer_img = glob.glob("pve_%s/r_volume_Occu_Meltzer.img" % foldername)[0] 
-        analyze_to_nifti(occu_meltzer_img)
+        analyze_to_nifti(occu_meltzer_img, affine=orig_affine)
         meltzer_img = glob.glob("pve_%s/r_volume_Meltzer.img" % foldername)[0] 
-        analyze_to_nifti(meltzer_img)
+        analyze_to_nifti(meltzer_img, affine=orig_affine)
         MG_rousset_img = glob.glob("pve_%s/r_volume_MGRousset.img" % foldername)[0] 
-        analyze_to_nifti(MG_rousset_img)
+        analyze_to_nifti(MG_rousset_img, affine=orig_affine)
         MGCS_img = glob.glob("pve_%s/r_volume_MGCS.img" % foldername)[0] 
-        analyze_to_nifti(MGCS_img)
+        analyze_to_nifti(MGCS_img, affine=orig_affine)
         virtual_PET_img = glob.glob("pve_%s/r_volume_Virtual_PET.img" % foldername)[0] 
-        analyze_to_nifti(virtual_PET_img)
+        analyze_to_nifti(virtual_PET_img, affine=orig_affine)
         centrum_semiovalue_WM_img = glob.glob("pve_%s/r_volume_CSWMROI.img" % foldername)[0] 
-        analyze_to_nifti(centrum_semiovalue_WM_img)
+        analyze_to_nifti(centrum_semiovalue_WM_img, affine=orig_affine)
         alfano_alfano_img = glob.glob("pve_%s/r_volume_AlfanoAlfano.img" % foldername)[0] 
-        analyze_to_nifti(alfano_alfano_img)
+        analyze_to_nifti(alfano_alfano_img, affine=orig_affine)
         alfano_cs_img = glob.glob("pve_%s/r_volume_AlfanoCS.img" % foldername)[0] 
-        analyze_to_nifti(alfano_cs_img)
+        analyze_to_nifti(alfano_cs_img, affine=orig_affine)
         alfano_rousset_img = glob.glob("pve_%s/r_volume_AlfanoRousset.img" % foldername)[0] 
-        analyze_to_nifti(alfano_rousset_img)
+        analyze_to_nifti(alfano_rousset_img, affine=orig_affine)
         mg_alfano_img = glob.glob("pve_%s/r_volume_MGAlfano.img" % foldername)[0] 
-        analyze_to_nifti(mg_alfano_img)
+        analyze_to_nifti(mg_alfano_img, affine=orig_affine)
         mask_img = glob.glob("pve_%s/r_volume_Mask.img" % foldername)[0] 
-        analyze_to_nifti(mask_img)
+        analyze_to_nifti(mask_img, affine=orig_affine)
         PSF_img = glob.glob("pve_%s/r_volume_PSF.img" % foldername)[0] 
         analyze_to_nifti(PSF_img)
 

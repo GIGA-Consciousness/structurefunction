@@ -48,6 +48,7 @@ workflow.connect([(infosource, fspet,[('subject_id', 'inputnode.subject_id')])])
 workflow.connect([(datasource, fspet,[('fdg_pet_image', 'inputnode.pet')])])
 
 workflow.connect([(fspet, datasink, [("outputnode.out_files", "@subject_id.out_files"),
+                                     ("outputnode.corrected_pet_to_t1", "@subject_id.corrected_pet_to_t1"),
                                           ])])
 
 workflow.connect([(infosource, datasink,[('subject_id','@subject_id')])])

@@ -51,6 +51,10 @@ def create_freesurfer_pet_quantification_wf(name="fspetquant"):
     applyxfm_rois = applyxfm_t1.clone("applyxfm_rois")
     applyxfm_rois.inputs.interp = 'nearestneighbour'
 
+    applyxfm_CorrectedPET = pe.Node(interface=fsl.ApplyXfm(), name = 'applyxfm_CorrectedPET')
+    applyxfm_CorrectedPET.inputs.apply_xfm = True
+    applyxfm_CorrectedPET.inputs.interp = 'trilinear'
+
     pve_correction = pe.Node(interface=PartialVolumeCorrection(), name = 'pve_correction')
     pve_correction.inputs.skip_atlas = False
     pve_correction.inputs.use_fs_LUT = False
@@ -125,15 +129,23 @@ def create_freesurfer_pet_quantification_wf(name="fspetquant"):
     workflow.connect(
         [(applyxfm_rois, pve_correction, [('out_file', 'roi_file')])])
 
-    output_fields = ["out_files", "mueller_gartner_rousset", "pet_to_t1"]
+    workflow.connect(
+        [(pve_correction, applyxfm_CorrectedPET, [('mueller_gartner_rousset', 'in_file')])])
+    workflow.connect(
+        [(mri_convert_T1, applyxfm_CorrectedPET, [('out_file', 'reference')])])
+    workflow.connect(
+        [(coregister, applyxfm_CorrectedPET, [('out_matrix_file', 'in_matrix_file')])])
+
+    output_fields = ["out_files", "pet_to_t1", "corrected_pet_to_t1"]
 
     outputnode = pe.Node(
         interface=util.IdentityInterface(fields=output_fields),
         name="outputnode")
 
     workflow.connect(
-        [(pve_correction, outputnode, [("out_files", "out_files")]),
-         (coregister,     outputnode, [("out_file", "pet_to_t1")]),
+        [(pve_correction,        outputnode, [("out_files", "out_files")]),
+         (applyxfm_CorrectedPET, outputnode, [("out_file", "corrected_pet_to_t1")]),
+         (coregister,            outputnode, [("out_file", "pet_to_t1")]),
          ])
 
     return workflow
