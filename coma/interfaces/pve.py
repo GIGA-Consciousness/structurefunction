@@ -1,7 +1,7 @@
 from nipype.interfaces.matlab import MatlabCommand
 from nipype.interfaces.base import (
     BaseInterface, BaseInterfaceInputSpec, traits, InputMultiPath,
-    File, TraitedSpec, Directory, isdefined)
+    OutputMultiPath, File, TraitedSpec, Directory, isdefined)
 from nipype.utils.filemanip import split_filename
 import os
 import os.path as op
@@ -163,7 +163,8 @@ class PartialVolumeCorrectionOutputSpec(TraitedSpec):
         exists=True, desc='rousset_mat_file')
     point_spread_image = File(
         exists=True, desc='point_spread_image')
-
+    out_files = OutputMultiPath(File,
+        exists=True, desc='all PVE files')
 
 class PartialVolumeCorrection(BaseInterface):
 
@@ -277,4 +278,17 @@ class PartialVolumeCorrection(BaseInterface):
         outputs['alfano_rousset'] = op.abspath("r_volume_AlfanoRousset.nii.gz")
         outputs['mueller_gartner_alfano'] = op.abspath(
             "r_volume_MGAlfano.nii.gz")
+        outputs['out_files'] = [outputs['occu_mueller_gartner'],
+                                outputs['occu_meltzer'],
+                                outputs['meltzer'],
+                                outputs['mueller_gartner_rousset'],
+                                outputs['mueller_gartner_WMroi'],
+                                outputs['virtual_pet_image'],
+                                outputs['white_matter_roi'],
+                                outputs['rousset_mat_file'],
+                                outputs['alfano_alfano'],
+                                outputs['alfano_cs'],
+                                outputs['alfano_rousset'],
+                                outputs['mueller_gartner_alfano'],
+                                ]
         return outputs

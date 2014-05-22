@@ -41,6 +41,13 @@ def select_CSF(tissue_class_files):
             CSF = in_file
     return CSF
 
+def select_GM(tissue_class_files):
+    CSF = None
+    for in_file in tissue_class_files:
+        if in_file.rfind("_seg_1") > 0:
+            CSF = in_file
+    return CSF
+
 def select_WM(tissue_class_files):
     WM = None
     for in_file in tissue_class_files:
