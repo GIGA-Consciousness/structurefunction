@@ -13,85 +13,6 @@ fsl.FSLCommand.set_default_output_type('NIFTI')
 
 from coma.interfaces import RegionalValues, nonlinfit_fn, CMR_glucose
 
-def add_subj_name_to_sfmask(subject_id):
-    return subject_id + "_SingleFiberMask.nii.gz"
-
-def add_subj_name_to_fdgpet(subject_id):
-    return subject_id + "_fdgpet.nii"
-
-def add_subj_name_to_wmmask(subject_id):
-    return subject_id + "_wmmask.nii"
-
-def add_subj_name_to_termmask(subject_id):
-    return subject_id + "_cortex.nii"
-
-def add_subj_name_to_T1brain(subject_id):
-    return subject_id + "_T1brain.nii"
-
-def add_subj_name_to_T1(subject_id):
-    return subject_id + "_T1.nii"
-
-def add_subj_name_to_rois(subject_id):
-    return subject_id + "_PreCoTh_rois.nii"
-
-def select_CSF(tissue_class_files):
-    CSF = None
-    for in_file in tissue_class_files:
-        if in_file.rfind("_seg_0") > 0:
-            CSF = in_file
-    return CSF
-
-def select_GM(tissue_class_files):
-    CSF = None
-    for in_file in tissue_class_files:
-        if in_file.rfind("_seg_1") > 0:
-            CSF = in_file
-    return CSF
-
-def select_WM(tissue_class_files):
-    WM = None
-    for in_file in tissue_class_files:
-        if in_file.rfind("_seg_2") > 0:
-            WM = in_file
-    return WM
-
-
-def return_subject_data(subject_id, data_file):
-    import csv
-    from nipype import logging
-    iflogger = logging.getLogger('interface')
-
-    f = open(data_file, 'r')
-    csv_line_by_line = csv.reader(f)
-    found = False
-    # Must be stored in this order!:
-    # 'subject_id', 'dose', 'weight', 'delay', 'glycemie', 'scan_time']
-    for line in csv_line_by_line:
-        if line[0] == subject_id:
-            dose, weight, delay, glycemie, scan_time = [float(x) for x in line[1:]]
-            iflogger.info('Subject %s found' % subject_id)
-            iflogger.info('Dose: %s' % dose)
-            iflogger.info('Weight: %s' % weight)
-            iflogger.info('Delay: %s' % delay)
-            iflogger.info('Glycemie: %s' % glycemie)
-            iflogger.info('Scan Time: %s' % scan_time)
-            found = True
-            break
-    if not found:
-        raise Exception("Subject id %s was not in the data file!" % subject_id)
-    return dose, weight, delay, glycemie, scan_time
-
-
-def select_ribbon(list_of_files):
-    from nipype.utils.filemanip import split_filename
-    for in_file in list_of_files:
-        _, name, ext = split_filename(in_file)
-        if name == 'ribbon':
-            idx = list_of_files.index(in_file)
-    return list_of_files[idx]
-
-
-
 def summarize_precoth(dwi_network_file, fdg_stats_file, subject_id):
     import os.path as op
     import scipy.io as sio
@@ -152,41 +73,6 @@ def summarize_precoth(dwi_network_file, fdg_stats_file, subject_id):
     f.write(data_str)
     f.close()
     return out_file
-
-
-def wm_labels_only(in_file, out_filename):
-    from nipype.utils.filemanip import split_filename
-    import nibabel as nb
-    import numpy as np
-    import os.path as op
-    in_image = nb.load(in_file)
-    in_header = in_image.get_header()
-    in_data = in_image.get_data()
-
-    out_data = np.zeros(np.shape(in_data))
-    out_data[np.where(in_data==2)] = 1
-    out_data[np.where(in_data==41)] = 1
-    out_data[np.where(in_data==82)] = 1
-    out_data[np.where(in_data==251)] = 1
-    out_data[np.where(in_data==252)] = 1
-    out_data[np.where(in_data==253)] = 1
-    out_data[np.where(in_data==254)] = 1
-    out_data[np.where(in_data==255)] = 1
-    out_data[np.where(in_data==49)] = 1
-    out_data[np.where(in_data==10)] = 1
-
-
-    _, name, _ = split_filename(in_file)
-    out_file = op.abspath(out_filename)
-    try:
-        out_image = nb.Nifti1Image(
-            data=out_data, header=in_header, affine=in_image.get_affine())
-    except TypeError:
-        out_image = nb.Nifti1Image(
-            dataobj=out_data, header=in_header, affine=in_image.get_affine())
-    nb.save(out_image, out_file)
-    return out_file
-
 
 def extract_PreCoTh(in_file, out_filename):
     from nipype.utils.filemanip import split_filename
@@ -412,8 +298,6 @@ def create_precoth_pipeline(name="precoth", tractography_type='probabilistic', r
     workflow.connect(
         [(reorientRibbon, make_termination_mask, [('out_file', 'in_file')])])
 
-
-
     workflow.connect([(inputnode, fsl2mrtrix, [("bvecs", "bvec_file"),
                                                ("bvals", "bval_file")])])
 
@@ -583,6 +467,7 @@ def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True, auto_re
 
     fast_seg_T1 = pe.Node(interface=fsl.FAST(), name='fast_seg_T1')
     fast_seg_T1.inputs.segments = True
+    fast_seg_T1.inputs.probability_maps = True
 
     fix_wm_mask = pe.Node(interface=fsl.MultiImageMaths(), name='fix_wm_mask')
     fix_wm_mask.inputs.op_string = "-mul %s"
@@ -704,8 +589,11 @@ def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True, auto_re
             [(mri_convert_Brain, fast_seg_T1, [('out_file', 'in_files')])])
 
 
+    workflow.connect(
+        [(inputnode, fast_seg_T1, [("subject_id", "out_basename")])])
     workflow.connect([(fast_seg_T1, fix_termination_mask, [(('tissue_class_files', select_CSF), 'in_file')])])
     workflow.connect([(fast_seg_T1, fix_wm_mask, [(('tissue_class_files', select_WM), 'in_file')])])
+
 
     workflow.connect(
         [(make_termination_mask, fix_termination_mask, [('out_file', 'operand_files')])])
@@ -771,14 +659,16 @@ def create_precoth_pipeline_step1(name="precoth_step1", reg_pet_T1=True, auto_re
         workflow.connect([(inputnode, mri_convert_T1, [(('subject_id', add_subj_name_to_T1), 'out_file')])])
         workflow.connect([(inputnode, mri_convert_Brain, [(('subject_id', add_subj_name_to_T1brain), 'out_file')])])
 
-
     output_fields = ["single_fiber_mask", "fa", "rgb_fa", "md", "t1", "t1_brain",
-    "wm_mask", "term_mask", "fdgpet", "rois","mode"]
+    "wm_mask", "term_mask", "fdgpet", "rois","mode", "tissue_class_files", "probability_maps"]
 
     outputnode = pe.Node(
         interface=util.IdentityInterface(fields=output_fields),
         name="outputnode")
 
+    workflow.connect([(fast_seg_T1, outputnode, [("tissue_class_files", "tissue_class_files")])])
+    workflow.connect([(fast_seg_T1, outputnode, [("probability_maps", "probability_maps")])])
+    
     workflow.connect([
          (nonlinfit_node, outputnode, [("FA", "fa")]),
          (nonlinfit_node, outputnode, [("rgb_fa", "rgb_fa")]),
