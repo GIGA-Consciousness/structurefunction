@@ -3,5 +3,5 @@ from .dti import nonlinfit_fn
 from .functional import RegionalValues, SimpleTimeCourseCorrelationGraph
 from .gift import SingleSubjectICA
 from .graphs import CreateConnectivityThreshold, ConnectivityGraph
-from .glucose import CMR_glucose
+from .glucose import CMR_glucose, calculate_SUV
 from .pve import PartialVolumeCorrection

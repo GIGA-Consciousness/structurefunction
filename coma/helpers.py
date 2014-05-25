@@ -150,3 +150,114 @@ def remove_unconnected_graphs_avg_and_cff(in_files, resolution_network_file, gro
     out_files.append(op.abspath(avg_out_cff_name))
 
     return out_files
+
+
+def add_subj_name_to_sfmask(subject_id):
+    return subject_id + "_SingleFiberMask.nii.gz"
+
+def add_subj_name_to_fdgpet(subject_id):
+    return subject_id + "_fdgpet.nii"
+
+def add_subj_name_to_wmmask(subject_id):
+    return subject_id + "_wmmask.nii"
+
+def add_subj_name_to_termmask(subject_id):
+    return subject_id + "_cortex.nii"
+
+def add_subj_name_to_T1brain(subject_id):
+    return subject_id + "_T1brain.nii"
+
+def add_subj_name_to_T1(subject_id):
+    return subject_id + "_T1.nii"
+
+def add_subj_name_to_rois(subject_id):
+    return subject_id + "_PreCoTh_rois.nii"
+
+def select_CSF(tissue_class_files):
+    CSF = None
+    for in_file in tissue_class_files:
+        if in_file.rfind("_seg_0") > 0:
+            CSF = in_file
+    return CSF
+
+def select_GM(tissue_class_files):
+    CSF = None
+    for in_file in tissue_class_files:
+        if in_file.rfind("_seg_1") > 0:
+            CSF = in_file
+    return CSF
+
+def select_WM(tissue_class_files):
+    WM = None
+    for in_file in tissue_class_files:
+        if in_file.rfind("_seg_2") > 0:
+            WM = in_file
+    return WM
+
+
+def return_subject_data(subject_id, data_file):
+    import csv
+    from nipype import logging
+    iflogger = logging.getLogger('interface')
+
+    f = open(data_file, 'r')
+    csv_line_by_line = csv.reader(f)
+    found = False
+    # Must be stored in this order!:
+    # 'subject_id', 'dose', 'weight', 'delay', 'glycemie', 'scan_time']
+    for line in csv_line_by_line:
+        if line[0] == subject_id:
+            dose, weight, delay, glycemie, scan_time = [float(x) for x in line[1:]]
+            iflogger.info('Subject %s found' % subject_id)
+            iflogger.info('Dose: %s' % dose)
+            iflogger.info('Weight: %s' % weight)
+            iflogger.info('Delay: %s' % delay)
+            iflogger.info('Glycemie: %s' % glycemie)
+            iflogger.info('Scan Time: %s' % scan_time)
+            found = True
+            break
+    if not found:
+        raise Exception("Subject id %s was not in the data file!" % subject_id)
+    return dose, weight, delay, glycemie, scan_time
+
+
+def select_ribbon(list_of_files):
+    from nipype.utils.filemanip import split_filename
+    for in_file in list_of_files:
+        _, name, ext = split_filename(in_file)
+        if name == 'ribbon':
+            idx = list_of_files.index(in_file)
+    return list_of_files[idx]
+
+def wm_labels_only(in_file, out_filename):
+    from nipype.utils.filemanip import split_filename
+    import nibabel as nb
+    import numpy as np
+    import os.path as op
+    in_image = nb.load(in_file)
+    in_header = in_image.get_header()
+    in_data = in_image.get_data()
+
+    out_data = np.zeros(np.shape(in_data))
+    out_data[np.where(in_data==2)] = 1
+    out_data[np.where(in_data==41)] = 1
+    out_data[np.where(in_data==82)] = 1
+    out_data[np.where(in_data==251)] = 1
+    out_data[np.where(in_data==252)] = 1
+    out_data[np.where(in_data==253)] = 1
+    out_data[np.where(in_data==254)] = 1
+    out_data[np.where(in_data==255)] = 1
+    out_data[np.where(in_data==49)] = 1
+    out_data[np.where(in_data==10)] = 1
+
+
+    _, name, _ = split_filename(in_file)
+    out_file = op.abspath(out_filename)
+    try:
+        out_image = nb.Nifti1Image(
+            data=out_data, header=in_header, affine=in_image.get_affine())
+    except TypeError:
+        out_image = nb.Nifti1Image(
+            dataobj=out_data, header=in_header, affine=in_image.get_affine())
+    nb.save(out_image, out_file)
+    return out_file
