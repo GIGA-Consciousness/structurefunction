@@ -1,13 +1,68 @@
+import os.path as op
+import gzip
+import nibabel as nb
+import numpy as np
+from nipype.utils.filemanip import split_filename
+
+def nifti_to_analyze(nii):
+    nifti = nb.load(nii)
+    if nii[-3:] == '.gz':
+        nif = gzip.open(nii, 'rb')
+    else:
+        nif = open(nii, 'rb')
+    hdr = nb.nifti1.Nifti1Header.from_fileobj(nif)
+
+    arr_hdr = nb.analyze.AnalyzeHeader.from_header(hdr)
+    arrb = hdr.raw_data_from_fileobj(nif)
+    img = nb.AnalyzeImage(
+        dataobj=arrb, affine=nifti.get_affine(), header=arr_hdr)
+    _, name, _ = split_filename(nii)
+    nb.analyze.save(img, op.abspath(name + '.img'))
+    return op.abspath(name + '.img'), op.abspath(name + '.hdr')
+
+
+def analyze_to_nifti(img, ext='.nii.gz', affine=None):
+    image = nb.load(img)
+    _, name, _ = split_filename(img)
+    if affine is None:
+        nii = nb.Nifti1Image.from_image(image)
+        affine = image.get_affine()
+        nii.set_sform(affine)
+        nii.set_qform(affine)
+    else:
+        nii = nb.Nifti1Image(dataobj=image.get_data(),
+                             header=image.get_header(), affine=affine)
+
+    nb.save(nii, op.abspath(name + ext))
+    return op.abspath(name + ext)
+
+
+def switch_datatype(in_file, dt=np.uint8):
+    '''
+    Changes ROI values to prevent values equal to 1, 2,
+    or 3. These are reserved for GM/WM/CSF in the PVELab
+    functions.
+    '''
+
+    image = nb.load(in_file)
+    image.set_data_dtype(dt)
+    _, name, _ = split_filename(in_file)
+    fixed_image = op.abspath(name + "_u8.nii.gz")
+    nb.save(image, fixed_image)
+    return fixed_image
+
+
 def get_names(lookup_table):
     LUT_dict = {}
     with open(lookup_table) as LUT:
         for line in LUT:
             if line[0] != "#" and line != "\r\n":
                 parse = line.split()
-                LUT_dict[int(parse[0])] = parse[1].replace(" ","")
+                LUT_dict[int(parse[0])] = parse[1].replace(" ", "")
     return LUT_dict
 
-def prepare_for_uint8(in_array):
+
+def prepare_for_uint8(in_array, ignore=[0]):
     import numpy as np
     np.unique(in_array)
     assert(in_array.all > 0)
@@ -15,15 +70,17 @@ def prepare_for_uint8(in_array):
     uniquevals = np.unique(in_array)
     uniquevals = uniquevals.tolist()
     uniquevals.sort()
-    if 0 in uniquevals:
-        uniquevals.remove(0)
+
+    for ig in ignore:
+        if ig in uniquevals:
+            uniquevals.remove(ig)
     assert(len(uniquevals) < 204)
     # We start at 51 because PVElab doesn't work otherwise. No idea why
     # We first remap to negative values so we don't accidentally
     # overwrite previously changed values
     out_data = in_array.copy()
     remap_dict = {}
-    for idx, v in enumerate(xrange(51,len(uniquevals)+51)):
+    for idx, v in enumerate(xrange(51, len(uniquevals) + 51)):
         old = uniquevals[idx]
         remap_dict[v] = old
         out_data[np.where(in_array == old)] = -v
@@ -328,6 +385,7 @@ def wm_labels_only(in_file, out_filename=None, include_thalamus=False):
     nb.save(out_image, out_file)
     return out_file
 
+
 def csf_labels_only(in_file, out_filename=None):
     from nipype.utils.filemanip import split_filename
     import nibabel as nb
@@ -357,6 +415,9 @@ def csf_labels_only(in_file, out_filename=None):
 
     # 5th ventricle
     out_data[np.where(in_data == 72)] = 1
+
+    # CSF
+    out_data[np.where(in_data == 24)] = 1
 
     if out_filename is None:
         _, name, _ = split_filename(in_file)
