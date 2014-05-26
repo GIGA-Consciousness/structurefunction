@@ -9,6 +9,7 @@ import networkx as nx
 import scipy.io as sio
 from nipype.interfaces.cmtk.nx import (remove_all_edges, add_node_data, add_edge_data)
 from scipy.stats.stats import pearsonr
+from ..helpers import get_names
 
 from nipype import logging
 iflogger = logging.getLogger('interface')
@@ -31,6 +32,7 @@ class RegionalValuesInputSpec(TraitedSpec):
                      'in_files'], desc='Functional (e.g. Positron Emission Tomography) image')
     segmentation_file = File(exists=True, mandatory=True,
                              desc='Image with segmented regions (e.g. aparc+aseg.nii or the output from cmtk.Parcellate())')
+    lookup_table = File(exists=True, desc='Optional lookup table for grabbing region names')
     resolution_network_file = File(exists=True, desc='Parcellation files from Connectome Mapping Toolkit. This is not necessary'
                                    ', but if included, the interface will output the statistical maps as networkx graphs.')
     subject_id = traits.Str(desc='Subject ID')
@@ -66,7 +68,9 @@ class RegionalValues(BaseInterface):
     output_spec = RegionalValuesOutputSpec
 
     def _run_interface(self, runtime):
-
+        if isdefined(self.inputs.lookup_table):
+            LUT_dict = get_names(self.inputs.lookup_table)
+                    
         if len(self.inputs.in_files) > 1:
             iflogger.info('Multiple input images detected')
             iflogger.info(len(self.inputs.in_files))
@@ -112,6 +116,8 @@ class RegionalValues(BaseInterface):
             stats['func_min'] = roi_min_tc
             stats['func_stdev'] = roi_std_tc
             stats['number_of_voxels'] = voxels
+            stats['rois'] = rois
+            stats['roi_names'] = [LUT_dict[x] for x in rois]
 
             global all_ntwks
             all_ntwks = list()
@@ -122,6 +128,8 @@ class RegionalValues(BaseInterface):
                 per_file_stats['func_mean'] = roi_mean_tc[:, in_file_idx]
                 per_file_stats['func_min'] = roi_min_tc[:, in_file_idx]
                 per_file_stats['func_stdev'] = roi_std_tc[:, in_file_idx]
+                per_file_stats['rois'] = rois
+                per_file_stats['roi_names'] = [LUT_dict[x] for x in rois]
                 #per_file_stats['number_of_voxels'] = voxels[in_file_idx]
                 for key in per_file_stats.keys():
                     iflogger.info(key)
@@ -145,6 +153,7 @@ class RegionalValues(BaseInterface):
                 all_ntwks.extend(ntwks)
         else:
             rois = get_roi_list(self.inputs.segmentation_file)
+            LUT_dict
             roi_mean_tc, roi_max_tc, roi_min_tc, roi_std_tc, voxels = get_timecourse_by_region(
                 in_files, self.inputs.segmentation_file, rois)
 
@@ -154,6 +163,8 @@ class RegionalValues(BaseInterface):
             stats['func_min'] = roi_min_tc
             stats['func_stdev'] = roi_std_tc
             stats['number_of_voxels'] = voxels
+            stats['rois'] = rois
+            stats['roi_names'] = [LUT_dict[x] for x in rois]
 
         if isdefined(self.inputs.subject_id):
             stats['subject_id'] = self.inputs.subject_id
@@ -205,7 +216,7 @@ def get_roi_values(roi, segmentationdata, in_files):
                 functionaldata = functional.get_data()
             else:
                 functionaldata = in_file.get_data()
-            assert np.shape(segmentationdata) == np.shape(functionaldata)
+            assert np.shape(segmentationdata)[0:3] == np.shape(functionaldata)[0:3]
             roi_mean = np.mean(functionaldata[x, y, z])
             roi_means.append(roi_mean)
             roi_max = np.max(functionaldata[x, y, z])
