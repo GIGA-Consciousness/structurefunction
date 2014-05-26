@@ -50,35 +50,90 @@ def analyze_to_nifti(img, ext='.nii.gz', affine=None):
     return op.abspath(name + ext)
 
 
-def fix_roi_values(roi_image, white_matter_file, csf_file):
+def fix_roi_values(roi_image, white_matter_file, csf_file, use_fs_LUT=True):
     '''
     Changes ROI values to prevent values equal to 1, 2,
     or 3. These are reserved for GM/WM/CSF in the PVELab
     functions.
     '''
+    
+    # This makes sure the WM labels in the FS mask
+    # get changed to value 2.
+    from coma.helpers import wm_labels_only, csf_labels_only, prepare_for_uint8
+    _, name, _ = split_filename(roi_image)
 
-    image = nb.load(roi_image)
-    data = image.get_data()
-    data = data.astype(np.uint8)
-    data[data > 0] = data[data > 0] + 50
+    white_matter_default = 2
+    csf_default = 3
+    
+    if use_fs_LUT:
+        # Get regions labelled white and csf
+        wm_label_file = op.abspath(name + "_WM.nii.gz")
+        wm_only = wm_labels_only(roi_image, out_filename=wm_label_file)
+        wm_label_image = nb.load(wm_only)
+        wm_labels = wm_label_image.get_data()
+
+        csf_label_file = op.abspath(name + "_CSF.nii.gz")
+        csf_only = csf_labels_only(roi_image, out_filename=csf_label_file)
+        csf_label_image = nb.load(csf_only)
+        csf_labels = csf_label_image.get_data()
 
     wm_image = nb.load(white_matter_file)
     wm_data = wm_image.get_data()
     csf_image = nb.load(csf_file)
     csf_data = csf_image.get_data()
 
+    image = nb.load(roi_image)
+    data = image.get_data()
+    print(np.unique(data))
+    print(len(np.unique(data)))
+
     assert (data.shape == wm_data.shape == csf_data.shape)
-    data[(wm_data > 0)*(data == 0)] = 2
-    data[(csf_data > 0)*(data == 0)] = 3
+    if use_fs_LUT:
+        data[np.where(wm_labels > 0)] = white_matter_default
+        data[np.where(csf_labels > 0)] = csf_default
+
+    # Be careful with the brackets here. & takes priority over comparisons
+    data[np.where((wm_data > 0) & (data == 0))] = white_matter_default
+    data[np.where((csf_data > 0) & (data == 0))] = csf_default
+
+    wm_labels[np.where(data == white_matter_default)] = 1
+    wm_labels[np.where(data == csf_default)] = 0
+    wm_labels[np.where(data == 0)] = 0
+    wm_labels = wm_labels.astype(np.uint8)
+    new_wm_label_image = nb.Nifti1Image(
+        dataobj=wm_labels, affine=wm_image.get_affine(), header=wm_image.get_header())
+    new_wm_label_image.set_data_dtype(np.uint8)
+    _, name, _ = split_filename(white_matter_file)
+    wm_label_file = op.abspath(name + "_fixedWM.nii.gz")
+    nb.save(new_wm_label_image, wm_label_file)
+
+    print(np.unique(data))
+    print(len(np.unique(data)))
+    csf_data[np.where(data != csf_default)] = 0
+    csf_data[np.where(csf_labels > 0)] = 1
+    csf_data = csf_data.astype(np.uint8)
+    csf_label_image = nb.Nifti1Image(
+        dataobj=csf_data, affine=csf_image.get_affine(), header=csf_image.get_header())
+    csf_label_image.set_data_dtype(np.uint8)
+    _, name, _ = split_filename(csf_file)
+    csf_label_file = op.abspath(name + "_fixedCSF.nii.gz")
+    nb.save(csf_label_image, csf_label_file)
 
     hdr = image.get_header()
+    data_uint8, remap_dict = prepare_for_uint8(data)
+    data_uint8 = data_uint8.astype(np.uint8)
+    data_uint8[np.where(data == csf_default)] = csf_default
+    data_uint8[np.where(data == white_matter_default)] = white_matter_default
+    print(np.unique(data_uint8))
+    print(len(np.unique(data_uint8)))
+
     fixed = nb.Nifti1Image(
-        dataobj=data, affine=image.get_affine(), header=hdr)
+        dataobj=data_uint8, affine=image.get_affine(), header=hdr)
     _, name, _ = split_filename(roi_image)
     fixed.set_data_dtype(np.uint8)
-    fixed_roi_image = op.abspath(name + "_p100.nii.gz")
+    fixed_roi_image = op.abspath(name + "_fixedROIs.nii.gz")
     nb.save(fixed, fixed_roi_image)
-    return fixed_roi_image
+    return fixed_roi_image, wm_label_file, csf_label_file, remap_dict
 
 def switch_datatype(in_file, dt=np.uint8):
     '''
@@ -94,7 +149,8 @@ def switch_datatype(in_file, dt=np.uint8):
     nb.save(image, fixed_image)
     return fixed_image
 
-def write_config_dat(roi_file, use_fs_LUT=False):
+def write_config_dat(roi_file, LUT=None, remap_dict=None):
+    from ..helpers import get_names
     out_file = "ROI_names.dat"
     f = open(out_file, "w")
     f.write(
@@ -104,19 +160,28 @@ def write_config_dat(roi_file, use_fs_LUT=False):
     IDs = np.unique(data)
     IDs.sort()
     IDs = IDs.tolist()
-    if 0 in IDs:
-        IDs.remove(0)
-    if 1 in IDs:
-        IDs.remove(1)
-    if 2 in IDs:
-        IDs.remove(2)
-    if 3 in IDs:
-        IDs.remove(3)
-    r = lambda: random.randint(0, 255)
-    for idx, val in enumerate(IDs):
-        # e.g. 81  R_Hippocampus       008000
-        f.write("%i\tRegion%i\t%02X%02X%02X\n" % (val, idx, r(), r(), r()))
-    f.close()
+
+    for x in xrange(4):
+        if x in IDs:
+            IDs.remove(x)
+    if LUT is None and remap_dict is None:
+        r = lambda: random.randint(0, 255)
+        for idx, val in enumerate(IDs):
+            # e.g. 81  R_Hippocampus       008000
+            f.write("%i\tRegion%i\t%02X%02X%02X\n" % (val, idx, r(), r(), r()))
+        f.close()
+    else:
+        for x in xrange(4):
+            if x in IDs:
+                IDs.remove(x)
+        r = lambda: random.randint(0, 255)
+        for idx, val in enumerate(IDs):
+            # e.g. 81  R_Hippocampus       008000
+            fs_val = remap_dict[val]
+            LUT_dict = get_names(LUT)
+            name = LUT_dict[fs_val]
+            f.write("%i\t%s\t%02X%02X%02X\n" % (val, name, r(), r(), r()))
+        f.close()
     return op.abspath(out_file)
 
 
@@ -140,6 +205,12 @@ class PartialVolumeCorrectionInputSpec(BaseInterfaceInputSpec):
 
 
 class PartialVolumeCorrectionOutputSpec(TraitedSpec):
+    results_text_file = File(
+        exists=True, desc='PVELab results as text')
+    wm_label_file = File(
+        exists=True, desc='White matter binary mask from ROI labels')
+    csf_label_file = File(
+        exists=True, desc='Cerebrospinal fluid binary mask from ROI labels')
     alfano_alfano = File(
         exists=True, desc='alfano_alfano')
     alfano_cs = File(
@@ -199,20 +270,28 @@ class PartialVolumeCorrection(BaseInterface):
         gm_path, _ = nifti_to_analyze(gm_uint8)
         iflogger.info("Writing to %s" % gm_path)
 
-        wm_uint8 = switch_datatype(self.inputs.white_matter_file)
+        fixed_roi_file, fixed_wm, fixed_csf, remap_dict = fix_roi_values(self.inputs.roi_file, self.inputs.white_matter_file, self.inputs.csf_file, self.inputs.use_fs_LUT)
+        rois_path, _ = nifti_to_analyze(fixed_roi_file)
+        iflogger.info("Writing to %s" % rois_path)
+        iflogger.info("Writing to %s" % fixed_wm)
+        iflogger.info("Writing to %s" % fixed_csf)
+
+        wm_uint8 = switch_datatype(fixed_wm)
         wm_path, _ = nifti_to_analyze(wm_uint8)
         iflogger.info("Writing to %s" % wm_path)
 
-        csf_uint8 = switch_datatype(self.inputs.csf_file)
+        csf_uint8 = switch_datatype(fixed_csf)
         csf_path, _ = nifti_to_analyze(csf_uint8)
         iflogger.info("Writing to %s" % csf_path)
 
-        fixed_roi_file = fix_roi_values(self.inputs.roi_file, self.inputs.white_matter_file, self.inputs.csf_file)
-        rois_path, _ = nifti_to_analyze(fixed_roi_file)
-        iflogger.info("Writing to %s" % rois_path)
-
-        dat_path = write_config_dat(
-            fixed_roi_file, self.inputs.use_fs_LUT)
+        if self.inputs.use_fs_LUT:
+            fs_dir = os.environ['FREESURFER_HOME']
+            LUT = op.join(fs_dir, "FreeSurferColorLUT.txt") 
+            dat_path = write_config_dat(
+                fixed_roi_file, LUT, remap_dict)
+        else:
+            dat_path = write_config_dat(
+                fixed_roi_file)
         iflogger.info("Writing to %s" % dat_path)
 
         d = dict(
@@ -269,6 +348,14 @@ class PartialVolumeCorrection(BaseInterface):
 
     def _list_outputs(self):
         outputs = self._outputs().get()
+
+        _, foldername, _ = split_filename(self.inputs.pet_file)
+        outputs['results_text_file'] = op.abspath("pve_%s/r_volume_pve.txt" % foldername)
+        _, name, _ = split_filename(self.inputs.white_matter_file)
+        outputs['wm_label_file'] = op.abspath(name + "_fixedWM.nii.gz")
+        _, name, _ = split_filename(self.inputs.csf_file)
+        outputs['csf_label_file'] = op.abspath(name + "_fixedCSF.nii.gz")
+        outputs['occu_mueller_gartner'] = op.abspath("r_volume_Occu_MG.nii.gz")
         outputs['occu_mueller_gartner'] = op.abspath("r_volume_Occu_MG.nii.gz")
         outputs['occu_meltzer'] = op.abspath("r_volume_Occu_Meltzer.nii.gz")
         outputs['meltzer'] = op.abspath("r_volume_Meltzer.nii.gz")

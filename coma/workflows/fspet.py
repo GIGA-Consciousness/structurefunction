@@ -5,12 +5,11 @@ import nipype.interfaces.utility as util     # utility
 import nipype.pipeline.engine as pe          # pypeline engine
 import nipype.interfaces.fsl as fsl
 import nipype.interfaces.freesurfer as fs
+import coma.interfaces as ci
 from nipype.workflows.misc.utils import select_aparc
-from .precoth import select_CSF, select_WM, select_GM
+from ..helpers import select_CSF, select_WM, select_GM
 
 fsl.FSLCommand.set_default_output_type('NIFTI')
-
-from coma.interfaces.pve import PartialVolumeCorrection
 
 def create_freesurfer_pet_quantification_wf(name="fspetquant"):
     inputnode = pe.Node(
@@ -31,6 +30,7 @@ def create_freesurfer_pet_quantification_wf(name="fspetquant"):
 
     fast_seg_T1 = pe.Node(interface=fsl.FAST(), name='fast_seg_T1')
     fast_seg_T1.inputs.segments = True
+    fast_seg_T1.inputs.probability_maps = True
 
     coregister = pe.Node(interface=fsl.FLIRT(dof=6), name = 'coregister')
     coregister.inputs.cost = ('corratio')
@@ -55,13 +55,15 @@ def create_freesurfer_pet_quantification_wf(name="fspetquant"):
     applyxfm_CorrectedPET.inputs.apply_xfm = True
     applyxfm_CorrectedPET.inputs.interp = 'trilinear'
 
-    pve_correction = pe.Node(interface=PartialVolumeCorrection(), name = 'pve_correction')
+    pve_correction = pe.Node(interface=ci.PartialVolumeCorrection(), name = 'pve_correction')
     pve_correction.inputs.skip_atlas = False
-    pve_correction.inputs.use_fs_LUT = False
+    pve_correction.inputs.use_fs_LUT = True
+
+    regional_values = pe.Node(interface=ci.RegionalValues(),name='fdgpet_regions')
+    regional_values.inputs.lookup_table = op.join(os.environ["FREESURFER_HOME"], "FreeSurferColorLUT.txt")
 
     workflow = pe.Workflow(name=name)
     workflow.base_output_dir = name
-
 
     workflow.connect(
         [(inputnode, FreeSurferSource, [("subjects_dir", "subjects_dir")])])
@@ -79,6 +81,8 @@ def create_freesurfer_pet_quantification_wf(name="fspetquant"):
         [(mri_convert_T1, coregister, [('out_file', 'reference')])])
     workflow.connect(
         [(mri_convert_Brain, fast_seg_T1, [('out_file', 'in_files')])])
+    workflow.connect(
+        [(inputnode, fast_seg_T1, [('subject_id', 'out_basename')])])
     workflow.connect(
         [(inputnode, coregister, [('pet', 'in_file')])])
     workflow.connect(
@@ -101,15 +105,15 @@ def create_freesurfer_pet_quantification_wf(name="fspetquant"):
 
     workflow.connect(
         [(inputnode, applyxfm_gm, [('pet', 'reference')])])    
-    workflow.connect([(fast_seg_T1, applyxfm_gm, [(('tissue_class_files', select_GM), 'in_file')])])
+    workflow.connect([(fast_seg_T1, applyxfm_gm, [(('partial_volume_files', select_GM), 'in_file')])])
     
     workflow.connect(
         [(inputnode, applyxfm_wm, [('pet', 'reference')])])    
-    workflow.connect([(fast_seg_T1, applyxfm_wm, [(('tissue_class_files', select_WM), 'in_file')])])
+    workflow.connect([(fast_seg_T1, applyxfm_wm, [(('partial_volume_files', select_WM), 'in_file')])])
     
     workflow.connect(
         [(inputnode, applyxfm_csf, [('pet', 'reference')])])    
-    workflow.connect([(fast_seg_T1, applyxfm_csf, [(('tissue_class_files', select_CSF), 'in_file')])])    
+    workflow.connect([(fast_seg_T1, applyxfm_csf, [(('partial_volume_files', select_CSF), 'in_file')])])    
 
     workflow.connect(
         [(inputnode, applyxfm_rois, [('pet', 'reference')])])
@@ -136,7 +140,14 @@ def create_freesurfer_pet_quantification_wf(name="fspetquant"):
     workflow.connect(
         [(coregister, applyxfm_CorrectedPET, [('out_matrix_file', 'in_matrix_file')])])
 
-    output_fields = ["out_files", "pet_to_t1", "corrected_pet_to_t1"]
+    workflow.connect(
+        [(inputnode, regional_values, [("subject_id", "subject_id")])])
+    workflow.connect(
+        [(pve_correction, regional_values, [('mueller_gartner_rousset', 'in_files')])])
+    workflow.connect(
+        [(applyxfm_rois, regional_values, [('out_file', 'segmentation_file')])])
+
+    output_fields = ["out_files", "pet_to_t1", "corrected_pet_to_t1", "pet_stats"]
 
     outputnode = pe.Node(
         interface=util.IdentityInterface(fields=output_fields),
@@ -146,6 +157,7 @@ def create_freesurfer_pet_quantification_wf(name="fspetquant"):
         [(pve_correction,        outputnode, [("out_files", "out_files")]),
          (applyxfm_CorrectedPET, outputnode, [("out_file", "corrected_pet_to_t1")]),
          (coregister,            outputnode, [("out_file", "pet_to_t1")]),
+         (regional_values,       outputnode, [("stats_file", "pet_stats")]),
          ])
 
     return workflow
