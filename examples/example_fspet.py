@@ -49,9 +49,12 @@ workflow.connect([(datasource, fspet,[('fdg_pet_image', 'inputnode.pet')])])
 
 workflow.connect([(fspet, datasink, [("outputnode.out_files", "@subject_id.out_files"),
                                      ("outputnode.corrected_pet_to_t1", "@subject_id.corrected_pet_to_t1"),
+                                     ("outputnode.pet_results_npz", "@subject_id.pet_results_npz"),
                                           ])])
 
 workflow.connect([(infosource, datasink,[('subject_id','@subject_id')])])
 workflow.write_graph()
+workflow.config['execution'] = {'remove_unnecessary_outputs': 'false',
+                                'hash_method': 'timestamp'}
 workflow.run()
 #workflow.run(plugin='MultiProc', plugin_args={'n_procs' : 4})

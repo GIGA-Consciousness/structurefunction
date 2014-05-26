@@ -11,44 +11,38 @@ import glob
 import logging
 import numpy as np
 import random
-import gzip
 import shutil
+import scipy.io as sio
+from ..helpers import analyze_to_nifti, nifti_to_analyze, switch_datatype
 logging.basicConfig()
 iflogger = logging.getLogger('interface')
 
+def parse_pve_results(results_text_file):
+    out_data = {}
 
-def nifti_to_analyze(nii):
-    nifti = nb.load(nii)
-    if nii[-3:] == '.gz':
-        nif = gzip.open(nii, 'rb')
-    else:
-        nif = open(nii, 'rb')
-    hdr = nb.nifti1.Nifti1Header.from_fileobj(nif)
+    with open(results_text_file) as res:
+        for line in res:
+            if line[0:15] == "PET file name: ":
+                pet_file = line[15:].strip()
+                pet_file = pet_file.replace('\n','')
+            elif line[0:31] == "Labeled segmented GM file name " > 0:
+                gm_file = line[31:].replace(' ', '')
+                gm_file = gm_file.replace('\n','')
+            elif line[0:45] == "PET SLICE USED FOR mean WM activity MEASURE: " > 0:
+                wm_slice_used = int(line[45:].replace('\n',''))
+            elif line[0:10] == "DATA OF...":
+                line = line.replace(' ', '')
+                line = line.replace('\n','')
+                region_names = line.split(',')[1:]
+            elif line != "\r\n" and line != "\n":
+                parse = [x.strip() for x in line.split(',')]
+                out_data[parse[0].replace(' ', '_')] = [float(x) for x in parse[1:]]
 
-    arr_hdr = nb.analyze.AnalyzeHeader.from_header(hdr)
-    arrb = hdr.raw_data_from_fileobj(nif)
-    img = nb.AnalyzeImage(
-        dataobj=arrb, affine=nifti.get_affine(), header=arr_hdr)
-    _, name, _ = split_filename(nii)
-    nb.analyze.save(img, op.abspath(name + '.img'))
-    return op.abspath(name + '.img'), op.abspath(name + '.hdr')
-
-
-def analyze_to_nifti(img, ext='.nii.gz', affine=None):
-    image = nb.load(img)
-    _, name, _ = split_filename(img)
-    if affine is None:
-        nii = nb.Nifti1Image.from_image(image)
-        affine = image.get_affine()
-        nii.set_sform(affine)
-        nii.set_qform(affine)
-    else:
-        nii = nb.Nifti1Image(dataobj=image.get_data(),
-            header=image.get_header(), affine=affine)
-
-    nb.save(nii, op.abspath(name + ext))
-    return op.abspath(name + ext)
-
+    out_data["wm_slice_used"] = wm_slice_used
+    out_data["region_names"] = region_names
+    out_data["pet_file"] = pet_file
+    out_data["gm_file"] = gm_file
+    return out_data
 
 def fix_roi_values(roi_image, white_matter_file, csf_file, use_fs_LUT=True):
     '''
@@ -84,8 +78,6 @@ def fix_roi_values(roi_image, white_matter_file, csf_file, use_fs_LUT=True):
 
     image = nb.load(roi_image)
     data = image.get_data()
-    print(np.unique(data))
-    print(len(np.unique(data)))
 
     assert (data.shape == wm_data.shape == csf_data.shape)
     if use_fs_LUT:
@@ -107,8 +99,6 @@ def fix_roi_values(roi_image, white_matter_file, csf_file, use_fs_LUT=True):
     wm_label_file = op.abspath(name + "_fixedWM.nii.gz")
     nb.save(new_wm_label_image, wm_label_file)
 
-    print(np.unique(data))
-    print(len(np.unique(data)))
     csf_data[np.where(data != csf_default)] = 0
     csf_data[np.where(csf_labels > 0)] = 1
     csf_data = csf_data.astype(np.uint8)
@@ -120,12 +110,10 @@ def fix_roi_values(roi_image, white_matter_file, csf_file, use_fs_LUT=True):
     nb.save(csf_label_image, csf_label_file)
 
     hdr = image.get_header()
-    data_uint8, remap_dict = prepare_for_uint8(data)
+    data_uint8, remap_dict = prepare_for_uint8(data, ignore=range(0,3))
     data_uint8 = data_uint8.astype(np.uint8)
     data_uint8[np.where(data == csf_default)] = csf_default
     data_uint8[np.where(data == white_matter_default)] = white_matter_default
-    print(np.unique(data_uint8))
-    print(len(np.unique(data_uint8)))
 
     fixed = nb.Nifti1Image(
         dataobj=data_uint8, affine=image.get_affine(), header=hdr)
@@ -135,19 +123,7 @@ def fix_roi_values(roi_image, white_matter_file, csf_file, use_fs_LUT=True):
     nb.save(fixed, fixed_roi_image)
     return fixed_roi_image, wm_label_file, csf_label_file, remap_dict
 
-def switch_datatype(in_file, dt=np.uint8):
-    '''
-    Changes ROI values to prevent values equal to 1, 2,
-    or 3. These are reserved for GM/WM/CSF in the PVELab
-    functions.
-    '''
 
-    image = nb.load(in_file)
-    image.set_data_dtype(dt)
-    _, name, _ = split_filename(in_file)
-    fixed_image = op.abspath(name + "_u8.nii.gz")
-    nb.save(image, fixed_image)
-    return fixed_image
 
 def write_config_dat(roi_file, LUT=None, remap_dict=None):
     from ..helpers import get_names
@@ -205,6 +181,10 @@ class PartialVolumeCorrectionInputSpec(BaseInterfaceInputSpec):
 
 
 class PartialVolumeCorrectionOutputSpec(TraitedSpec):
+    results_matlab_mat = File(
+        exists=True, desc='PVELab results as MATLAB .mat file')
+    results_numpy_npz = File(
+        exists=True, desc='PVELab results as NumPy .npz file')
     results_text_file = File(
         exists=True, desc='PVELab results as text')
     wm_label_file = File(
@@ -344,13 +324,26 @@ class PartialVolumeCorrection(BaseInterface):
 
         rousset_mat_file = glob.glob("pve_%s/r_volume_Rousset.mat" % foldername)[0]
         shutil.copyfile(rousset_mat_file, op.abspath("r_volume_Rousset.mat"))
+
+        results_text_file = glob.glob("pve_%s/r_volume_pve.txt" % foldername)[0]
+        shutil.copyfile(rousset_mat_file, op.abspath("r_volume_pve.txt"))
+
+        results_matlab_mat = op.abspath("%s_pve.mat" % foldername)
+        results_numpy_npz = op.abspath("%s_pve.npz" % foldername)
+
+        out_data = parse_pve_results(results_text_file)
+        sio.savemat(results_matlab_mat, mdict=out_data)
+        np.savez(results_numpy_npz, **out_data)
         return result.runtime
 
     def _list_outputs(self):
         outputs = self._outputs().get()
 
         _, foldername, _ = split_filename(self.inputs.pet_file)
-        outputs['results_text_file'] = op.abspath("pve_%s/r_volume_pve.txt" % foldername)
+        outputs['results_matlab_mat'] = op.abspath("%s_pve.mat" % foldername)
+        outputs['results_numpy_npz'] = op.abspath("%s_pve.npz" % foldername)
+        
+        outputs['results_text_file'] = op.abspath("r_volume_pve.txt")
         _, name, _ = split_filename(self.inputs.white_matter_file)
         outputs['wm_label_file'] = op.abspath(name + "_fixedWM.nii.gz")
         _, name, _ = split_filename(self.inputs.csf_file)

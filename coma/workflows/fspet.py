@@ -140,14 +140,8 @@ def create_freesurfer_pet_quantification_wf(name="fspetquant"):
     workflow.connect(
         [(coregister, applyxfm_CorrectedPET, [('out_matrix_file', 'in_matrix_file')])])
 
-    workflow.connect(
-        [(inputnode, regional_values, [("subject_id", "subject_id")])])
-    workflow.connect(
-        [(pve_correction, regional_values, [('mueller_gartner_rousset', 'in_files')])])
-    workflow.connect(
-        [(applyxfm_rois, regional_values, [('out_file', 'segmentation_file')])])
-
-    output_fields = ["out_files", "pet_to_t1", "corrected_pet_to_t1", "pet_stats"]
+    output_fields = ["out_files", "pet_to_t1", "corrected_pet_to_t1", "pet_results_npz",
+                     "pet_results_mat"]
 
     outputnode = pe.Node(
         interface=util.IdentityInterface(fields=output_fields),
@@ -155,9 +149,10 @@ def create_freesurfer_pet_quantification_wf(name="fspetquant"):
 
     workflow.connect(
         [(pve_correction,        outputnode, [("out_files", "out_files")]),
+         (pve_correction,       outputnode, [("results_numpy_npz", "pet_results_npz")]),
+         (pve_correction,       outputnode, [("results_matlab_mat", "pet_results_mat")]),
          (applyxfm_CorrectedPET, outputnode, [("out_file", "corrected_pet_to_t1")]),
          (coregister,            outputnode, [("out_file", "pet_to_t1")]),
-         (regional_values,       outputnode, [("stats_file", "pet_stats")]),
          ])
 
     return workflow
