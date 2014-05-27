@@ -1,5 +1,5 @@
 import os.path as op
-from coma.workflows.dti import bundle_tracks
+from coma.interfaces.dti import bundle_tracks
 
 in_file = op.abspath("/Code/structurefunction/examples/"\
     "precoth/ex_precoth/coma_precoth/_subject_id_Bend1/"\

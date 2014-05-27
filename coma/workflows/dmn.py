@@ -135,8 +135,6 @@ def combine_rois(rois_to_combine):
     import os.path as op
     import nibabel as nb
     import numpy as np
-    import string
-    import random
     from nipype.utils.filemanip import split_filename
     print("Combining %s" ",".join(rois_to_combine))
     image = nb.load(rois_to_combine[0])
@@ -162,16 +160,18 @@ def combine_rois(rois_to_combine):
     print("Written to %s" % out_file)
     return out_file
 
-def inclusion_filtering(track_file, roi_file, fa_file, md_file, prefix=None, tdi_threshold=10):
+def inclusion_filtering(track_file, roi_file, fa_file, md_file, registration_image_file=None, transformation=None, prefix=None, tdi_threshold=10):
     import os
     import os.path as op
     import nibabel as nb
     import numpy as np
     import glob
-    from coma.workflows.dmn import split_roi, get_rois, combine_rois, save_heatmap
+    from coma.workflows.dmn import split_roi, get_rois, save_heatmap
+    from coma.interfaces.dti import write_trackvis_scene
     import nipype.pipeline.engine as pe
     import nipype.interfaces.fsl as fsl
     import nipype.interfaces.mrtrix as mrtrix
+    import nipype.interfaces.diffusion_toolkit as dtk
     from nipype.utils.filemanip import split_filename
 
     rois = get_rois(roi_file)
@@ -183,6 +183,7 @@ def inclusion_filtering(track_file, roi_file, fa_file, md_file, prefix=None, tdi
     tdi_matrix = np.zeros((len(rois), len(rois)))
     track_volume_matrix = np.zeros((len(rois), len(rois)))
 
+    track_files = []
     for idx_i, roi_i in enumerate(rois):
         for idx_j, roi_j in enumerate(rois):
             if roi_j > roi_i:
@@ -191,6 +192,9 @@ def inclusion_filtering(track_file, roi_file, fa_file, md_file, prefix=None, tdi
                 roi_i_file = [s for s in roi_files if "%d" % roi_i in s]
                 roi_j_file = [s for s in roi_files if "%d" % roi_j in s]
                 
+                coregister = pe.Node(interface=fsl.FLIRT(dof=12), name = 'coregister')
+                coregister.inputs.cost = ('normmi')                
+
                 filter_tracks_roi_i = pe.Node(interface=mrtrix.FilterTracks(), name='filt_%d' % int(roi_i))
                 filter_tracks_roi_i.inputs.in_file = track_file
                 filter_tracks_roi_i.inputs.include_file = roi_i_file[0]
@@ -223,6 +227,13 @@ def inclusion_filtering(track_file, roi_file, fa_file, md_file, prefix=None, tdi
                 mean_tdi = pe.Node(interface=fsl.ImageStats(op_string = '-l %d -M' % tdi_threshold), name = 'mean_tdi_%s' % idpair)
                 track_volume = pe.Node(interface=fsl.ImageStats(op_string = '-l %d -V' % tdi_threshold ), name = 'track_volume_%s' % idpair)
 
+                tck2trk = pe.Node(interface=mrtrix.MRTrix2TrackVis(), name='tck2trk')
+                tck2trk.inputs.image_file = fa_file
+
+                if registration_image_file is not None and transformation is not None:
+                    tck2trk.inputs.registration_image_file = registration_image_file
+                    tck2trk.inputs.matrix_file = transformation
+
                 workflow = pe.Workflow(name=idpair)
                 workflow.base_dir = op.abspath(idpair)
 
@@ -230,6 +241,8 @@ def inclusion_filtering(track_file, roi_file, fa_file, md_file, prefix=None, tdi
                     [(filter_tracks_roi_i, filter_tracks_roi_i_roi_j, [("out_file", "in_file")])])
                 workflow.connect(
                     [(filter_tracks_roi_i_roi_j, tracks2tdi, [("out_file", "in_file")])])
+                workflow.connect(
+                    [(filter_tracks_roi_i_roi_j, tck2trk, [("out_file", "in_file")])])
                 workflow.connect(
                     [(tracks2tdi, binarize_tdi, [("tract_image", "in_file")])])
                 workflow.connect(
@@ -269,6 +282,9 @@ def inclusion_filtering(track_file, roi_file, fa_file, md_file, prefix=None, tdi
                 track_volume_node = [nodes[idx] for idx, s in enumerate(node_names) if "track_volume" in s][0]
                 track_volume = track_volume_node.result.outputs.out_stat[1] # First value is in voxels, 2nd is in volume
 
+                trk_node = [nodes[idx] for idx, s in enumerate(node_names) if "tck2trk" in s][0]
+                trk_file = trk_node.result.outputs.out_file
+
                 if track_volume == 0:
                     os.remove(fa_masked)
                     os.remove(md_masked)
@@ -279,6 +295,9 @@ def inclusion_filtering(track_file, roi_file, fa_file, md_file, prefix=None, tdi
                     out_files.append(fa_masked)
                     out_files.append(tracks)
                     out_files.append(tdi)
+                    out_files.append(trk_file)
+
+                track_files.append(trk_file)
 
                 assert(0 <= mean_fa < 1)
                 fa_matrix[idx_i, idx_j] = mean_fa
@@ -298,6 +317,23 @@ def inclusion_filtering(track_file, roi_file, fa_file, md_file, prefix=None, tdi
         npz_data = op.abspath("%s_connectivity.npz" % prefix)
     np.savez(npz_data, fa=fa_matrix, md=md_matrix, tdi=tdi_matrix, trkvol=track_volume_matrix)
 
+    out_merged_file = op.abspath('MergedTracks.trk')
+    skip = 80.
+    track_merge = pe.Node(interface=dtk.TrackMerge(), name='track_merge')
+    track_merge.inputs.track_files = track_files
+    track_merge.inputs.output_file = out_merged_file
+    track_merge.run()
+
+    track_names = []
+    for t in track_files:
+        _, name, _ = split_filename(t)
+        track_names.append(name)
+
+    out_scene_file = write_trackvis_scene(out_merged_file, n_clusters=len(track_files), skip=skip, names=track_names, out_file = "NewScene.scene")
+    print("Merged track file written to %s" % out_merged_file)
+    print("Scene file written to %s" % out_scene_file)
+    out_files.append(out_merged_file)
+    out_files.append(out_scene_file)
     #summary_images = []
     #summary_images.append(save_heatmap(fa_matrix))
     return out_files, npz_data
