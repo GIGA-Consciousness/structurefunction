@@ -12,10 +12,12 @@ subjects_dir = op.join(data_path, "subjects")
 os.environ['SUBJECTS_DIR'] = subjects_dir
 
 subject_id = "Bend1"
-hemi = "rh"
+hemi = "lh"
 surf = "pial"
+bgcolor = 'w'
 
-brain = Brain(subject_id, hemi, surf, subjects_dir=subjects_dir)
+brain = Brain(subject_id, hemi, surf, config_opts={'background': bgcolor},
+    subjects_dir=subjects_dir)
 data_file = op.abspath("example_fspet/pet_results_npz/_subject_id_Bend1/petmr_pve.npz")
 
 annot_path = op.join(subjects_dir, subject_id, "label")
@@ -86,3 +88,16 @@ these data move from low to high values), and add an alpha channel so the
 underlying anatomy is visible.
 """
 brain.add_data(vtx_data, min=vtx_data.min(), max=vtx_data.max(), colormap="jet", alpha=.6)
+
+image = brain.save_montage("Example_FDG-PET_FreesurferRegions.png", ['l', 'd', 'm'], orientation='v')
+
+brain.close()
+
+###############################################################################
+# View created image
+import pylab as pl
+fig = pl.figure(figsize=(5, 3), facecolor=bgcolor)
+ax = pl.axes(frameon=False)
+ax.imshow(image, origin='upper')
+pl.draw()
+pl.show()
