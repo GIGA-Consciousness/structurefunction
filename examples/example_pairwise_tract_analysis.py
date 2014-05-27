@@ -15,7 +15,7 @@ paired = create_paired_tract_analysis_wf("example_paired")
 paired.base_dir = op.abspath("example_paired")
 paired.inputs.inputnode.fa = op.join(path,"Bend1_fa.nii.gz")
 paired.inputs.inputnode.md = op.join(path,"Bend1_md.nii.gz")
-paired.inputs.inputnode.roi_file = op.join(path,"conform_Bend1_rois_flirt.nii.gz")
+paired.inputs.inputnode.roi_file = op.join(path,"DMN_ROIs_DTIReg.nii")
 paired.inputs.inputnode.track_file = op.join(path,"Bend1_tracks_50k.tck")
 paired.write_graph()
 paired.config['execution'] = {'remove_unnecessary_outputs': 'false',
