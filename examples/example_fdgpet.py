@@ -1,6 +1,7 @@
+import os
+import os.path as op
 import nipype.interfaces.io as nio           # Data i/o
 import nipype.interfaces.utility as util     # utility
-import os.path as op
 import nipype.interfaces.cmtk as cmtk
 import nipype.interfaces.freesurfer as fs
 import nipype.pipeline.engine as pe          # pypeline engine
@@ -9,6 +10,7 @@ import coma.interfaces as ci
 from coma.datasets import sample
 data_path = sample.data_path()
 
+fs_dir = os.environ['FREESURFER_HOME']
 subjects_dir = op.join(data_path,"subjects")
 output_dir = op.abspath('fdgpet')
 
@@ -37,6 +39,7 @@ resample_fdg_pet.inputs.out_type = 'nii'
 
 regional_metabolism = pe.Node(interface=ci.RegionalValues(), name="regional_metabolism")
 regional_metabolism.inputs.out_stats_file = 'regional_fdg_uptake.mat'
+regional_metabolism.inputs.lookup_table = op.join(fs_dir, "FreeSurferColorLUT.txt")
 
 datasink = pe.Node(interface=nio.DataSink(), name="datasink")
 datasink.inputs.base_directory = output_dir
