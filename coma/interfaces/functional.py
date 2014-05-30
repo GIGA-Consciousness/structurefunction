@@ -117,7 +117,8 @@ class RegionalValues(BaseInterface):
             stats['func_stdev'] = roi_std_tc
             stats['number_of_voxels'] = voxels
             stats['rois'] = rois
-            stats['roi_names'] = [LUT_dict[x] for x in rois]
+            if isdefined(self.inputs.lookup_table):
+                stats['roi_names'] = [LUT_dict[x] for x in rois]
 
             global all_ntwks
             all_ntwks = list()
@@ -129,7 +130,8 @@ class RegionalValues(BaseInterface):
                 per_file_stats['func_min'] = roi_min_tc[:, in_file_idx]
                 per_file_stats['func_stdev'] = roi_std_tc[:, in_file_idx]
                 per_file_stats['rois'] = rois
-                per_file_stats['roi_names'] = [LUT_dict[x] for x in rois]
+                if isdefined(self.inputs.lookup_table):
+                    per_file_stats['roi_names'] = [LUT_dict[x] for x in rois]
                 #per_file_stats['number_of_voxels'] = voxels[in_file_idx]
                 for key in per_file_stats.keys():
                     iflogger.info(key)
@@ -153,7 +155,6 @@ class RegionalValues(BaseInterface):
                 all_ntwks.extend(ntwks)
         else:
             rois = get_roi_list(self.inputs.segmentation_file)
-            LUT_dict
             roi_mean_tc, roi_max_tc, roi_min_tc, roi_std_tc, voxels = get_timecourse_by_region(
                 in_files, self.inputs.segmentation_file, rois)
 
@@ -164,7 +165,8 @@ class RegionalValues(BaseInterface):
             stats['func_stdev'] = roi_std_tc
             stats['number_of_voxels'] = voxels
             stats['rois'] = rois
-            stats['roi_names'] = [LUT_dict[x] for x in rois]
+            if isdefined(self.inputs.lookup_table):
+                stats['roi_names'] = [LUT_dict[x] for x in rois]
 
         if isdefined(self.inputs.subject_id):
             stats['subject_id'] = self.inputs.subject_id
