@@ -9,7 +9,7 @@ import coma.interfaces as ci
 from nipype.workflows.misc.utils import select_aparc
 from ..helpers import select_CSF, select_WM, select_GM
 
-fsl.FSLCommand.set_default_output_type('NIFTI')
+fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
 
 def create_freesurfer_pet_quantification_wf(name="fspetquant"):
     inputnode = pe.Node(
@@ -58,9 +58,6 @@ def create_freesurfer_pet_quantification_wf(name="fspetquant"):
     pve_correction = pe.Node(interface=ci.PartialVolumeCorrection(), name = 'pve_correction')
     pve_correction.inputs.skip_atlas = False
     pve_correction.inputs.use_fs_LUT = True
-
-    regional_values = pe.Node(interface=ci.RegionalValues(),name='fdgpet_regions')
-    regional_values.inputs.lookup_table = op.join(os.environ["FREESURFER_HOME"], "FreeSurferColorLUT.txt")
 
     workflow = pe.Workflow(name=name)
     workflow.base_output_dir = name
@@ -149,8 +146,8 @@ def create_freesurfer_pet_quantification_wf(name="fspetquant"):
 
     workflow.connect(
         [(pve_correction,        outputnode, [("out_files", "out_files")]),
-         (pve_correction,       outputnode, [("results_numpy_npz", "pet_results_npz")]),
-         (pve_correction,       outputnode, [("results_matlab_mat", "pet_results_mat")]),
+         (pve_correction,        outputnode, [("results_numpy_npz", "pet_results_npz")]),
+         (pve_correction,        outputnode, [("results_matlab_mat", "pet_results_mat")]),
          (applyxfm_CorrectedPET, outputnode, [("out_file", "corrected_pet_to_t1")]),
          (coregister,            outputnode, [("out_file", "pet_to_t1")]),
          ])
