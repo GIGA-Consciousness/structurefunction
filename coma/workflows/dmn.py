@@ -1,18 +1,10 @@
-import os
 import os.path as op
-import nipype.interfaces.io as nio           # Data i/o
 import nipype.interfaces.utility as util     # utility
 import nipype.pipeline.engine as pe          # pypeline engine
 import nipype.interfaces.fsl as fsl
-import nipype.interfaces.freesurfer as fs
 import nipype.interfaces.mrtrix as mrtrix
-import nipype.interfaces.cmtk as cmtk
-from nipype.workflows.misc.utils import select_aparc
 
 fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
-
-from coma.interfaces import RegionalValues, nonlinfit_fn, CMR_glucose
-
 
 def save_heatmap(in_array):
     import matplotlib.pyplot as plt
@@ -192,9 +184,6 @@ def inclusion_filtering(track_file, roi_file, fa_file, md_file, registration_ima
                 roi_i_file = [s for s in roi_files if "%d" % roi_i in s]
                 roi_j_file = [s for s in roi_files if "%d" % roi_j in s]
                 
-                coregister = pe.Node(interface=fsl.FLIRT(dof=12), name = 'coregister')
-                coregister.inputs.cost = ('normmi')                
-
                 filter_tracks_roi_i = pe.Node(interface=mrtrix.FilterTracks(), name='filt_%d' % int(roi_i))
                 filter_tracks_roi_i.inputs.in_file = track_file
                 filter_tracks_roi_i.inputs.include_file = roi_i_file[0]

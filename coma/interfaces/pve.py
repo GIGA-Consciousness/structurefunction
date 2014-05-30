@@ -17,6 +17,7 @@ from ..helpers import analyze_to_nifti, nifti_to_analyze, switch_datatype
 logging.basicConfig()
 iflogger = logging.getLogger('interface')
 
+
 def parse_pve_results(results_text_file):
     out_data = {}
 
@@ -24,19 +25,20 @@ def parse_pve_results(results_text_file):
         for line in res:
             if line[0:15] == "PET file name: ":
                 pet_file = line[15:].strip()
-                pet_file = pet_file.replace('\n','')
+                pet_file = pet_file.replace('\n', '')
             elif line[0:31] == "Labeled segmented GM file name " > 0:
                 gm_file = line[31:].replace(' ', '')
-                gm_file = gm_file.replace('\n','')
+                gm_file = gm_file.replace('\n', '')
             elif line[0:45] == "PET SLICE USED FOR mean WM activity MEASURE: " > 0:
-                wm_slice_used = int(line[45:].replace('\n',''))
+                wm_slice_used = int(line[45:].replace('\n', ''))
             elif line[0:10] == "DATA OF...":
                 line = line.replace(' ', '')
-                line = line.replace('\n','')
+                line = line.replace('\n', '')
                 region_names = line.split(',')[1:]
             elif line != "\r\n" and line != "\n":
                 parse = [x.strip() for x in line.split(',')]
-                out_data[parse[0].replace(' ', '_')] = [float(x) for x in parse[1:]]
+                out_data[parse[0].replace(' ', '_')] = [float(x)
+                                                        for x in parse[1:]]
 
     out_data["wm_slice_used"] = wm_slice_used
     out_data["region_names"] = region_names
@@ -44,13 +46,14 @@ def parse_pve_results(results_text_file):
     out_data["gm_file"] = gm_file
     return out_data
 
+
 def fix_roi_values(roi_image, white_matter_file, csf_file, use_fs_LUT=True):
     '''
     Changes ROI values to prevent values equal to 1, 2,
     or 3. These are reserved for GM/WM/CSF in the PVELab
     functions.
     '''
-    
+
     # This makes sure the WM labels in the FS mask
     # get changed to value 2.
     from coma.helpers import wm_labels_only, csf_labels_only, prepare_for_uint8
@@ -58,7 +61,7 @@ def fix_roi_values(roi_image, white_matter_file, csf_file, use_fs_LUT=True):
 
     white_matter_default = 2
     csf_default = 3
-    
+
     if use_fs_LUT:
         # Get regions labelled white and csf
         wm_label_file = op.abspath(name + "_WM.nii.gz")
@@ -88,10 +91,17 @@ def fix_roi_values(roi_image, white_matter_file, csf_file, use_fs_LUT=True):
     data[np.where((wm_data > 0) & (data == 0))] = white_matter_default
     data[np.where((csf_data > 0) & (data == 0))] = csf_default
 
-    wm_labels[np.where(data == white_matter_default)] = 1
-    wm_labels[np.where(data == csf_default)] = 0
-    wm_labels[np.where(data == 0)] = 0
-    wm_labels = wm_labels.astype(np.uint8)
+    if use_fs_LUT:
+        wm_labels[np.where(data == white_matter_default)] = 1
+        wm_labels[np.where(data == csf_default)] = 0
+        wm_labels[np.where(data == 0)] = 0
+        wm_labels = wm_labels.astype(np.uint8)
+    else:
+        wm_data[np.where(data == white_matter_default)] = 1
+        wm_data[np.where(data == csf_default)] = 0
+        wm_data[np.where(data == 0)] = 0
+        wm_labels = wm_data.astype(np.uint8)
+
     new_wm_label_image = nb.Nifti1Image(
         dataobj=wm_labels, affine=wm_image.get_affine(), header=wm_image.get_header())
     new_wm_label_image.set_data_dtype(np.uint8)
@@ -100,7 +110,9 @@ def fix_roi_values(roi_image, white_matter_file, csf_file, use_fs_LUT=True):
     nb.save(new_wm_label_image, wm_label_file)
 
     csf_data[np.where(data != csf_default)] = 0
-    csf_data[np.where(csf_labels > 0)] = 1
+    if use_fs_LUT:
+        csf_data[np.where(csf_labels > 0)] = 1
+
     csf_data = csf_data.astype(np.uint8)
     csf_label_image = nb.Nifti1Image(
         dataobj=csf_data, affine=csf_image.get_affine(), header=csf_image.get_header())
@@ -110,7 +122,7 @@ def fix_roi_values(roi_image, white_matter_file, csf_file, use_fs_LUT=True):
     nb.save(csf_label_image, csf_label_file)
 
     hdr = image.get_header()
-    data_uint8, remap_dict = prepare_for_uint8(data, ignore=range(0,3))
+    data_uint8, remap_dict = prepare_for_uint8(data, ignore=range(0, 3))
     data_uint8 = data_uint8.astype(np.uint8)
     data_uint8[np.where(data == csf_default)] = csf_default
     data_uint8[np.where(data == white_matter_default)] = white_matter_default
@@ -122,7 +134,6 @@ def fix_roi_values(roi_image, white_matter_file, csf_file, use_fs_LUT=True):
     fixed_roi_image = op.abspath(name + "_fixedROIs.nii.gz")
     nb.save(fixed, fixed_roi_image)
     return fixed_roi_image, wm_label_file, csf_label_file, remap_dict
-
 
 
 def write_config_dat(roi_file, LUT=None, remap_dict=None):
@@ -220,7 +231,8 @@ class PartialVolumeCorrectionOutputSpec(TraitedSpec):
     point_spread_image = File(
         exists=True, desc='point_spread_image')
     out_files = OutputMultiPath(File,
-        exists=True, desc='all PVE files')
+                                exists=True, desc='all PVE files')
+
 
 class PartialVolumeCorrection(BaseInterface):
 
@@ -242,7 +254,7 @@ class PartialVolumeCorrection(BaseInterface):
         f = open(list_path, 'w')
         f.write("%s;%s" % (pet_path, t1_path))
         f.close()
-        
+
         orig_t1 = nb.load(self.inputs.t1_file)
         orig_affine = orig_t1.get_affine()
 
@@ -250,7 +262,8 @@ class PartialVolumeCorrection(BaseInterface):
         gm_path, _ = nifti_to_analyze(gm_uint8)
         iflogger.info("Writing to %s" % gm_path)
 
-        fixed_roi_file, fixed_wm, fixed_csf, remap_dict = fix_roi_values(self.inputs.roi_file, self.inputs.white_matter_file, self.inputs.csf_file, self.inputs.use_fs_LUT)
+        fixed_roi_file, fixed_wm, fixed_csf, remap_dict = fix_roi_values(
+            self.inputs.roi_file, self.inputs.white_matter_file, self.inputs.csf_file, self.inputs.use_fs_LUT)
         rois_path, _ = nifti_to_analyze(fixed_roi_file)
         iflogger.info("Writing to %s" % rois_path)
         iflogger.info("Writing to %s" % fixed_wm)
@@ -266,7 +279,7 @@ class PartialVolumeCorrection(BaseInterface):
 
         if self.inputs.use_fs_LUT:
             fs_dir = os.environ['FREESURFER_HOME']
-            LUT = op.join(fs_dir, "FreeSurferColorLUT.txt") 
+            LUT = op.join(fs_dir, "FreeSurferColorLUT.txt")
             dat_path = write_config_dat(
                 fixed_roi_file, LUT, remap_dict)
         else:
@@ -295,37 +308,47 @@ class PartialVolumeCorrection(BaseInterface):
         result = mlab.run()
 
         _, foldername, _ = split_filename(self.inputs.pet_file)
-        occu_MG_img = glob.glob("pve_%s/r_volume_Occu_MG.img" % foldername)[0] 
+        occu_MG_img = glob.glob("pve_%s/r_volume_Occu_MG.img" % foldername)[0]
         analyze_to_nifti(occu_MG_img, affine=orig_affine)
-        occu_meltzer_img = glob.glob("pve_%s/r_volume_Occu_Meltzer.img" % foldername)[0] 
+        occu_meltzer_img = glob.glob(
+            "pve_%s/r_volume_Occu_Meltzer.img" % foldername)[0]
         analyze_to_nifti(occu_meltzer_img, affine=orig_affine)
-        meltzer_img = glob.glob("pve_%s/r_volume_Meltzer.img" % foldername)[0] 
+        meltzer_img = glob.glob("pve_%s/r_volume_Meltzer.img" % foldername)[0]
         analyze_to_nifti(meltzer_img, affine=orig_affine)
-        MG_rousset_img = glob.glob("pve_%s/r_volume_MGRousset.img" % foldername)[0] 
+        MG_rousset_img = glob.glob(
+            "pve_%s/r_volume_MGRousset.img" % foldername)[0]
         analyze_to_nifti(MG_rousset_img, affine=orig_affine)
-        MGCS_img = glob.glob("pve_%s/r_volume_MGCS.img" % foldername)[0] 
+        MGCS_img = glob.glob("pve_%s/r_volume_MGCS.img" % foldername)[0]
         analyze_to_nifti(MGCS_img, affine=orig_affine)
-        virtual_PET_img = glob.glob("pve_%s/r_volume_Virtual_PET.img" % foldername)[0] 
+        virtual_PET_img = glob.glob(
+            "pve_%s/r_volume_Virtual_PET.img" % foldername)[0]
         analyze_to_nifti(virtual_PET_img, affine=orig_affine)
-        centrum_semiovalue_WM_img = glob.glob("pve_%s/r_volume_CSWMROI.img" % foldername)[0] 
+        centrum_semiovalue_WM_img = glob.glob(
+            "pve_%s/r_volume_CSWMROI.img" % foldername)[0]
         analyze_to_nifti(centrum_semiovalue_WM_img, affine=orig_affine)
-        alfano_alfano_img = glob.glob("pve_%s/r_volume_AlfanoAlfano.img" % foldername)[0] 
+        alfano_alfano_img = glob.glob(
+            "pve_%s/r_volume_AlfanoAlfano.img" % foldername)[0]
         analyze_to_nifti(alfano_alfano_img, affine=orig_affine)
-        alfano_cs_img = glob.glob("pve_%s/r_volume_AlfanoCS.img" % foldername)[0] 
+        alfano_cs_img = glob.glob("pve_%s/r_volume_AlfanoCS.img" %
+                                  foldername)[0]
         analyze_to_nifti(alfano_cs_img, affine=orig_affine)
-        alfano_rousset_img = glob.glob("pve_%s/r_volume_AlfanoRousset.img" % foldername)[0] 
+        alfano_rousset_img = glob.glob(
+            "pve_%s/r_volume_AlfanoRousset.img" % foldername)[0]
         analyze_to_nifti(alfano_rousset_img, affine=orig_affine)
-        mg_alfano_img = glob.glob("pve_%s/r_volume_MGAlfano.img" % foldername)[0] 
+        mg_alfano_img = glob.glob("pve_%s/r_volume_MGAlfano.img" %
+                                  foldername)[0]
         analyze_to_nifti(mg_alfano_img, affine=orig_affine)
-        mask_img = glob.glob("pve_%s/r_volume_Mask.img" % foldername)[0] 
+        mask_img = glob.glob("pve_%s/r_volume_Mask.img" % foldername)[0]
         analyze_to_nifti(mask_img, affine=orig_affine)
-        PSF_img = glob.glob("pve_%s/r_volume_PSF.img" % foldername)[0] 
+        PSF_img = glob.glob("pve_%s/r_volume_PSF.img" % foldername)[0]
         analyze_to_nifti(PSF_img)
 
-        rousset_mat_file = glob.glob("pve_%s/r_volume_Rousset.mat" % foldername)[0]
+        rousset_mat_file = glob.glob(
+            "pve_%s/r_volume_Rousset.mat" % foldername)[0]
         shutil.copyfile(rousset_mat_file, op.abspath("r_volume_Rousset.mat"))
 
-        results_text_file = glob.glob("pve_%s/r_volume_pve.txt" % foldername)[0]
+        results_text_file = glob.glob(
+            "pve_%s/r_volume_pve.txt" % foldername)[0]
         shutil.copyfile(rousset_mat_file, op.abspath("r_volume_pve.txt"))
 
         results_matlab_mat = op.abspath("%s_pve.mat" % foldername)
@@ -342,7 +365,7 @@ class PartialVolumeCorrection(BaseInterface):
         _, foldername, _ = split_filename(self.inputs.pet_file)
         outputs['results_matlab_mat'] = op.abspath("%s_pve.mat" % foldername)
         outputs['results_numpy_npz'] = op.abspath("%s_pve.npz" % foldername)
-        
+
         outputs['results_text_file'] = op.abspath("r_volume_pve.txt")
         _, name, _ = split_filename(self.inputs.white_matter_file)
         outputs['wm_label_file'] = op.abspath(name + "_fixedWM.nii.gz")

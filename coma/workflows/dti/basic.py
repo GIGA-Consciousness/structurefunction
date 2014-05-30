@@ -1,25 +1,29 @@
-import os
 import nipype.interfaces.io as nio           # Data i/o
 import nipype.interfaces.utility as util     # utility
 import nipype.pipeline.engine as pe          # pypeline engine
 import nipype.interfaces.fsl as fsl
 import nipype.interfaces.freesurfer as fs    # freesurfer
 import nipype.interfaces.mrtrix as mrtrix
-import os.path as op                      # system functions
+from nipype.workflows.misc.utils import select_aparc
 
 fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
 
-from coma.interfaces import nonlinfit_fn
+from coma.interfaces.dti import nonlinfit_fn
 from coma.helpers import (add_subj_name_to_sfmask, add_subj_name_to_wmmask,
                           add_subj_name_to_T1, add_subj_name_to_T1brain,
-                          add_subj_name_to_termmask, select_aparc,
-                          select_ribbon, select_WM, select_CSF,
+                          add_subj_name_to_termmask, add_subj_name_to_aparc,
+                          select_ribbon, select_GM, select_WM, select_CSF,
                           wm_labels_only)
 
-def damaged_brain_dti_processing(name, auto_reorient=False):
+
+def damaged_brain_dti_processing(name="dwi_preproc"):
     '''
     Uses both Freesurfer and FAST to mask the white matter
     because neither works sufficiently well in patients
+    '''
+
+    '''
+    Define inputs and outputs of the workflow
     '''
     inputnode = pe.Node(
         interface=util.IdentityInterface(fields=["subjects_dir",
@@ -29,10 +33,30 @@ def damaged_brain_dti_processing(name, auto_reorient=False):
                                                  "bvals"]),
         name="inputnode")
 
+    outputnode = pe.Node(
+        interface=util.IdentityInterface(fields=["single_fiber_mask",
+                                                 "fa",
+                                                 "rgb_fa",
+                                                 "md",
+                                                 "mode",
+                                                 "t1",
+                                                 "t1_brain",
+                                                 "wm_mask",
+                                                 "term_mask",
+                                                 "aparc_aseg",
+                                                 "tissue_class_files",
+                                                 "gm_prob",
+                                                 "wm_prob",
+                                                 "csf_prob"]),
+        name="outputnode")
+
+    '''
+    Define the nodes
+    '''
     nonlinfit_interface = util.Function(
         input_names=["dwi", "bvecs", "bvals", "base_name"],
         output_names=["tensor", "FA", "MD", "evecs", "evals",
-        "rgb_fa", "norm", "mode", "binary_mask", "b0_masked"],
+                      "rgb_fa", "norm", "mode", "binary_mask", "b0_masked"],
         function=nonlinfit_fn)
 
     nonlinfit_node = pe.Node(
@@ -98,91 +122,57 @@ def damaged_brain_dti_processing(name, auto_reorient=False):
     mri_convert_ROIs = mri_convert_Brain.clone("mri_convert_ROIs")
     mri_convert_T1 = mri_convert_Brain.clone("mri_convert_T1")
 
-    mni_for_reg = op.join(os.environ["FSL_DIR"],
-                          "data", "standard", "MNI152_T1_1mm.nii.gz")
-
-    if auto_reorient:
-        reorientBrain = pe.Node(
-            interface=fsl.FLIRT(dof=6), name='reorientBrain')
-        reorientBrain.inputs.reference = mni_for_reg
-        reorientROIs = pe.Node(interface=fsl.ApplyXfm(), name='reorientROIs')
-        reorientROIs.inputs.interp = "nearestneighbour"
-        reorientROIs.inputs.reference = mni_for_reg
-        reorientRibbon = reorientROIs.clone("reorientRibbon")
-        reorientRibbon.inputs.interp = "nearestneighbour"
-        reorientT1 = reorientROIs.clone("reorientT1")
-        reorientT1.inputs.interp = "trilinear"
-
+    '''
+    Connect the workflow
+    '''
     workflow = pe.Workflow(name=name)
     workflow.base_dir = name
 
+    '''
+    Structural processing to create seed and termination masks
+    '''
     workflow.connect(
         [(inputnode, FreeSurferSource, [("subjects_dir", "subjects_dir")])])
     workflow.connect(
         [(inputnode, FreeSurferSource, [("subject_id", "subject_id")])])
-
     workflow.connect(
         [(FreeSurferSource, mri_convert_T1, [('T1', 'in_file')])])
     workflow.connect(
         [(FreeSurferSource, mri_convert_Brain, [('brain', 'in_file')])])
 
-    if auto_reorient:
-        workflow.connect(
-            [(mri_convert_T1, reorientT1, [('out_file', 'in_file')])])
-        workflow.connect(
-            [(mri_convert_Brain, reorientBrain, [('out_file', 'in_file')])])
-        workflow.connect(
-            [(reorientBrain, reorientROIs, [('out_matrix_file', 'in_matrix_file')])])
-        workflow.connect(
-            [(reorientBrain, reorientRibbon, [('out_matrix_file', 'in_matrix_file')])])
-        workflow.connect(
-            [(reorientBrain, reorientT1, [('out_matrix_file', 'in_matrix_file')])])
+    workflow.connect(
+        [(inputnode, mri_convert_T1, [(('subject_id', add_subj_name_to_T1), 'out_file')])])
+    workflow.connect(
+        [(inputnode, mri_convert_Brain, [(('subject_id', add_subj_name_to_T1brain), 'out_file')])])
+    workflow.connect(
+        [(mri_convert_Brain, fast_seg_T1, [('out_file', 'in_files')])])
+    workflow.connect(
+        [(inputnode, fast_seg_T1, [("subject_id", "out_basename")])])
 
     workflow.connect(
         [(FreeSurferSource, mri_convert_ROIs, [(('aparc_aseg', select_aparc), 'in_file')])])
-
-    if auto_reorient:
-        workflow.connect(
-            [(mri_convert_ROIs, reorientROIs, [('out_file', 'in_file')])])
-        workflow.connect(
-            [(reorientROIs, make_wm_mask, [('out_file', 'in_file')])])
-    else:
-        workflow.connect(
-            [(mri_convert_ROIs, make_wm_mask, [('out_file', 'in_file')])])
-
     workflow.connect(
-        [(FreeSurferSource, mri_convert_Ribbon, [(('ribbon', select_ribbon), 'in_file')])])
-
-    if auto_reorient:
-        workflow.connect(
-            [(mri_convert_Ribbon, reorientRibbon, [('out_file', 'in_file')])])
-        workflow.connect(
-            [(reorientRibbon, make_termination_mask, [('out_file', 'in_file')])])
-    else:
-        workflow.connect(
-            [(mri_convert_Ribbon, make_termination_mask, [('out_file', 'in_file')])])
-
-    if auto_reorient:
-        workflow.connect(
-            [(reorientBrain, fast_seg_T1, [('out_file', 'in_files')])])
-    else:
-        workflow.connect(
-            [(mri_convert_Brain, fast_seg_T1, [('out_file', 'in_files')])])
-
+        [(inputnode, mri_convert_ROIs, [(('subject_id', add_subj_name_to_aparc), 'out_file')])])
     workflow.connect(
-        [(inputnode, fast_seg_T1, [("subject_id", "out_basename")])])
+        [(mri_convert_ROIs, make_wm_mask, [('out_file', 'in_file')])])
     workflow.connect(
-        [(fast_seg_T1, fix_termination_mask, [(('tissue_class_files', select_CSF), 'in_file')])])
+        [(make_wm_mask, fix_wm_mask, [('out_file', 'operand_files')])])
     workflow.connect(
         [(fast_seg_T1, fix_wm_mask, [(('tissue_class_files', select_WM), 'in_file')])])
-
+    workflow.connect(
+        [(FreeSurferSource, mri_convert_Ribbon, [(('ribbon', select_ribbon), 'in_file')])])
+    workflow.connect(
+        [(mri_convert_Ribbon, make_termination_mask, [('out_file', 'in_file')])])
     workflow.connect(
         [(make_termination_mask, fix_termination_mask, [('out_file', 'operand_files')])])
     workflow.connect(
-        [(make_wm_mask, fix_wm_mask, [('out_file', 'operand_files')])])
+        [(fast_seg_T1, fix_termination_mask, [(('tissue_class_files', select_CSF), 'in_file')])])
 
-    workflow.connect(inputnode, 'dwi', nonlinfit_node, 'dwi')
+    '''
+    Diffusion processing
+    '''
     workflow.connect(inputnode, 'subject_id', nonlinfit_node, 'base_name')
+    workflow.connect(inputnode, 'dwi', nonlinfit_node, 'dwi')
     workflow.connect(inputnode, 'bvecs', nonlinfit_node, 'bvecs')
     workflow.connect(inputnode, 'bvals', nonlinfit_node, 'bvals')
 
@@ -198,6 +188,9 @@ def damaged_brain_dti_processing(name, auto_reorient=False):
     workflow.connect([(MRmult_merge, MRmultiply, [("out", "in_files")])])
     workflow.connect([(MRmultiply, threshold_FA, [("out_file", "in_file")])])
 
+    '''
+    Create a single fiber mask
+    '''
     workflow.connect([(nonlinfit_node, threshold_mode, [("mode", "in_file")])])
     workflow.connect(
         [(threshold_mode, MultFAbyMode_merge, [("out_file", "in1")])])
@@ -205,9 +198,12 @@ def damaged_brain_dti_processing(name, auto_reorient=False):
         [(threshold_FA, MultFAbyMode_merge, [("out_file", "in2")])])
     workflow.connect(
         [(MultFAbyMode_merge, MultFAbyMode, [("out", "in_files")])])
+
+    '''
+    Fix output names with subject ID
+    '''
     workflow.connect(
         [(inputnode, MultFAbyMode, [(('subject_id', add_subj_name_to_sfmask), 'out_filename')])])
-
     workflow.connect(
         [(inputnode, make_wm_mask, [(('subject_id', add_subj_name_to_wmmask), 'out_filename')])])
     workflow.connect(
@@ -215,31 +211,23 @@ def damaged_brain_dti_processing(name, auto_reorient=False):
     workflow.connect(
         [(inputnode, fix_termination_mask, [(('subject_id', add_subj_name_to_termmask), 'out_file')])])
 
-    if auto_reorient:
-        workflow.connect(
-            [(inputnode, reorientT1, [(('subject_id', add_subj_name_to_T1), 'out_file')])])
-        workflow.connect(
-            [(inputnode, reorientBrain, [(('subject_id', add_subj_name_to_T1brain), 'out_file')])])
-    else:
-        workflow.connect(
-            [(inputnode, mri_convert_T1, [(('subject_id', add_subj_name_to_T1), 'out_file')])])
-        workflow.connect(
-            [(inputnode, mri_convert_Brain, [(('subject_id', add_subj_name_to_T1brain), 'out_file')])])
 
-    output_fields = [
-        "single_fiber_mask", "fa", "rgb_fa", "md", "t1", "t1_brain",
-        "wm_mask", "term_mask", "fdgpet", "rois", "mode", "tissue_class_files", "probability_maps"]
-
-    outputnode = pe.Node(
-        interface=util.IdentityInterface(fields=output_fields),
-        name="outputnode")
-
+    '''
+    Connect outputnode
+    '''
     workflow.connect(
         [(fast_seg_T1, outputnode, [("tissue_class_files", "tissue_class_files")])])
+
     workflow.connect(
-        [(fast_seg_T1, outputnode, [("probability_maps", "probability_maps")])])
+        [(fast_seg_T1, outputnode, [(('probability_maps', select_GM), 'gm_prob')])])
+    workflow.connect(
+        [(fast_seg_T1, outputnode, [(('probability_maps', select_WM), 'wm_prob')])])
+    workflow.connect(
+        [(fast_seg_T1, outputnode, [(('probability_maps', select_CSF), 'csf_prob')])])
+
 
     workflow.connect([
+        (mri_convert_ROIs, outputnode, [("out_file", "aparc_aseg")]),
         (nonlinfit_node, outputnode, [("FA", "fa")]),
         (nonlinfit_node, outputnode, [("rgb_fa", "rgb_fa")]),
         (nonlinfit_node, outputnode, [("MD", "md")]),
@@ -247,16 +235,7 @@ def damaged_brain_dti_processing(name, auto_reorient=False):
         (MultFAbyMode, outputnode, [("out_file", "single_fiber_mask")]),
         (fix_wm_mask, outputnode, [("out_file", "wm_mask")]),
         (fix_termination_mask, outputnode, [("out_file", "term_mask")]),
+        (mri_convert_Brain, outputnode, [("out_file", "t1_brain")]),
+        (mri_convert_T1, outputnode, [("out_file", "t1")]),
     ])
-
-    if auto_reorient:
-        workflow.connect([
-            (reorientBrain, outputnode, [("out_file", "t1_brain")]),
-            (reorientT1, outputnode, [("out_file", "t1")]),
-        ])
-    else:
-        workflow.connect([
-            (mri_convert_Brain, outputnode, [("out_file", "t1_brain")]),
-            (mri_convert_T1, outputnode, [("out_file", "t1")]),
-        ])
     return workflow

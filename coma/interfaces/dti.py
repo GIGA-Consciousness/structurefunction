@@ -225,12 +225,9 @@ def write_trackvis_scene(track_file, n_clusters=1, skip=80, names=None, out_file
         v = uniform(0.2, 1)
 
         r, g, b = hsv_to_rgb(h, s, v)
-        #print(r,g,b)
-
         r = randint(0,255)
         g = randint(0,255)
         b = randint(0,255)
-        #r, g, b = [int(x*255) for x in color]
 
         if names is not None:
             f.write('        <Track name="%s" id="%d">\n' % (str(names[n]), n+1000))

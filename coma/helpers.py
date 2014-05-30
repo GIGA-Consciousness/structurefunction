@@ -255,51 +255,57 @@ def add_subj_name_to_sfmask(subject_id):
 
 
 def add_subj_name_to_fdgpet(subject_id):
-    return subject_id + "_fdgpet.nii"
+    return subject_id + "_fdgpet.nii.gz"
 
 
 def add_subj_name_to_wmmask(subject_id):
-    return subject_id + "_wmmask.nii"
+    return subject_id + "_wm_seed_mask.nii.gz"
 
 
 def add_subj_name_to_termmask(subject_id):
-    return subject_id + "_cortex.nii"
+    return subject_id + "_term_mask.nii.gz"
 
 
 def add_subj_name_to_T1brain(subject_id):
-    return subject_id + "_T1brain.nii"
+    return subject_id + "_T1brain.nii.gz"
 
 
 def add_subj_name_to_T1(subject_id):
-    return subject_id + "_T1.nii"
+    return subject_id + "_T1.nii.gz"
 
 
 def add_subj_name_to_rois(subject_id):
-    return subject_id + "_PreCoTh_rois.nii"
+    return subject_id + "_rois.nii.gz"
 
 
-def select_CSF(tissue_class_files):
-    CSF = None
-    for in_file in tissue_class_files:
-        if in_file.rfind("_seg_0") > 0 or in_file.rfind("_pve_0") > 0:
-            CSF = in_file
-    return CSF
+def add_subj_name_to_aparc(subject_id):
+    return subject_id + "_aparc+aseg.nii.gz"
 
 
-def select_GM(tissue_class_files):
-    GM = None
-    for in_file in tissue_class_files:
-        if in_file.rfind("_seg_1") > 0 or in_file.rfind("_pve_1") > 0:
-            GM = in_file
-    return GM
+def select_CSF(in_files):
+    out_file = None
+    names = ["_seg_0", "_pve_0", "_prob_0"]
+    for in_file in in_files:
+        if any(name in in_file for name in names):
+            out_file = in_file
+    return out_file
 
 
-def select_WM(tissue_class_files):
-    WM = None
-    for in_file in tissue_class_files:
-        if in_file.rfind("_seg_2") > 0 or in_file.rfind("_pve_2") > 0:
-            WM = in_file
-    return WM
+def select_GM(in_files):
+    out_file = None
+    names = ["_seg_1", "_pve_1", "_prob_1"]
+    for in_file in in_files:
+        if any(name in in_file for name in names):
+            out_file = in_file
+    return out_file
+
+def select_WM(in_files):
+    out_file = None
+    names = ["_seg_2", "_pve_2", "_prob_2"]
+    for in_file in in_files:
+        if any(name in in_file for name in names):
+            out_file = in_file
+    return out_file
 
 
 def return_subject_data(subject_id, data_file):
