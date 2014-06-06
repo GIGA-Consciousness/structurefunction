@@ -64,7 +64,6 @@ def get_names(lookup_table):
 
 def prepare_for_uint8(in_array, ignore=[0]):
     import numpy as np
-    np.unique(in_array)
     assert(in_array.all > 0)
     assert(in_array.any > 255)
     uniquevals = np.unique(in_array)
@@ -84,7 +83,7 @@ def prepare_for_uint8(in_array, ignore=[0]):
         old = uniquevals[idx]
         remap_dict[v] = old
         out_data[np.where(in_array == old)] = -v
-    out_data = out_data * -1
+    out_data = np.abs(out_data)
     return out_data, remap_dict
 
 
@@ -436,4 +435,86 @@ def csf_labels_only(in_file, out_filename=None):
         out_image = nb.Nifti1Image(
             dataobj=out_data, header=in_header, affine=in_image.get_affine())
     nb.save(out_image, out_file)
+    return out_file
+
+def rewrite_mat_for_applyxfm(in_matrix, orig_img, target_img, shape=[256,256,256], vox_size=[1,1,1]):
+    import numpy as np
+    import nibabel as nb
+    import os.path as op
+    
+    trans_matrix = np.loadtxt(in_matrix)
+
+    orig_file = nb.load(orig_img)
+    orig_aff = orig_file.get_affine()
+    orig_centroid = orig_aff[0:3,-1]
+
+    target_file = nb.load(target_img)
+    target_header = target_file.get_header()
+    target_aff = target_file.get_affine()
+    target_centroid = target_aff[0:3,-1]
+    target_shape = np.array(target_file.get_shape())
+    target_zooms = np.array(target_header.get_zooms())
+    target_FOV = target_shape * target_zooms
+    shape_arr = np.array(shape)
+    vox_size_arr = np.array(vox_size)
+    new_FOV = shape_arr * vox_size_arr
+
+    print("Target field-of-view")
+    print(target_FOV)
+
+    print("New field-of-view")
+    print(new_FOV)
+
+    fov_diff = np.abs(new_FOV - target_FOV)
+    print("Difference between FOVs")
+    print(fov_diff)
+
+    print("Difference between centroids")
+    centroid_diff = target_centroid - orig_centroid
+
+    print("Original Translation")
+    print(trans_matrix[0:3,-1])
+    trans_matrix[0:3,-1] = trans_matrix[0:3,-1] + fov_diff/2.0
+
+    print("Corrected Translation")
+    print(trans_matrix[0:3,-1])
+    
+    out_matrix = op.abspath("Transform.mat")
+    np.savetxt(out_matrix, trans_matrix)
+
+    hdr = nb.Nifti1Header()
+    affine = np.eye(4)
+    hdr.set_qform(affine)
+    shape = tuple(shape)
+    vox_size = tuple(vox_size)
+    hdr.set_data_shape(shape)
+    hdr.set_zooms(vox_size)
+    hdr.set_xyzt_units(xyz='mm')
+    out_image = op.abspath("HeaderImage.nii.gz")
+    img = nb.Nifti1Image(dataobj=np.empty((shape)), affine=affine, header=hdr)
+    nb.save(img, out_image)
+    return out_image, out_matrix
+
+
+def translate_image(in_file, x=0, y=0, z=0, affine_from=None):
+    from nipype.utils.filemanip import split_filename
+    _, name, _ = split_filename(in_file)
+    out_file = op.abspath(name + "_t.nii.gz")
+    in_img = nb.load(in_file)
+    orig_affine = in_img.get_affine()
+    if affine_from is None:
+        out_affine = orig_affine.copy()
+        out_affine[0,-1] = out_affine[0,-1] + x
+        out_affine[1,-1] = out_affine[1,-1] + y
+        out_affine[2,-1] = out_affine[2,-1] + z
+    else:
+        affine_from_img = nb.load(affine_from)
+        template_affine = affine_from_img.get_affine()
+        out_affine = template_affine.copy()
+        out_affine[0,-1] = out_affine[0,-1] + x
+        out_affine[1,-1] = out_affine[1,-1] + y
+        out_affine[2,-1] = out_affine[2,-1] + z
+        
+    img = nb.Nifti1Image(dataobj=in_img.get_data(), affine=out_affine, header=in_img.get_header())
+    nb.save(img, out_file)
     return out_file

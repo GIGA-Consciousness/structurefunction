@@ -1,15 +1,71 @@
 import nipype.interfaces.utility as util     # utility
 import nipype.pipeline.engine as pe          # pypeline engine
 import nipype.interfaces.fsl as fsl
+import nipype.interfaces.freesurfer as fs
 
-fsl.FSLCommand.set_default_output_type('NIFTI')
+fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
 
 from coma.workflows.dti.basic import damaged_brain_dti_processing
 from coma.workflows.dmn import create_paired_tract_analysis_wf
 from coma.workflows.pet import create_pet_quantification_wf
 from coma.labels import dmn_labels_combined
-from coma.helpers import add_subj_name_to_rois
+from coma.helpers import add_subj_name_to_rois, rewrite_mat_for_applyxfm
 
+def coreg_without_resample(name="highres_coreg"):
+    inputnode = pe.Node(
+        interface=util.IdentityInterface(fields=["fixed_image",
+                                                 "moving_image",
+                                                 "interp",
+                                                 "cost"]),
+        name="inputnode")
+
+    outputnode = pe.Node(
+        interface=util.IdentityInterface(fields=["out_file",
+                                                 "low_res_out_matrix_file",
+                                                 #"high_res_out_matrix_file",
+                                                 "resampled_fixed_image"]),
+        name="outputnode")
+    coregister_moving_to_fixed = pe.Node(interface=fsl.FLIRT(dof=12),
+        name = 'coregister_moving_to_fixed')
+    resample_fixed_to_moving = pe.Node(interface=fs.MRIConvert(),
+        name = 'resample_fixed_to_moving')
+
+    rewrite_mat_interface = util.Function(input_names=["in_matrix", "orig_img", "target_img", "shape", "vox_size"],
+                                  output_names=["out_image", "out_matrix"],
+                                  function=rewrite_mat_for_applyxfm)
+    fix_FOV_in_matrix = pe.Node(interface=rewrite_mat_interface, name='fix_FOV_in_matrix')
+
+    apply_fixed_matrix = pe.Node(interface=fsl.ApplyXfm(),
+        name = 'apply_fixed_matrix')
+
+    final_rigid_reg_to_fixed = pe.Node(interface=fsl.FLIRT(dof=6),
+        name = 'final_rigid_reg_to_fixed')
+
+    #out_image, out_matrix = rewrite_mat_for_applyxfm('WMtoFA.mat',
+    #    orig_img="Bend1_wm_seed_mask.nii.gz", target_img="Bend1_fa.nii.gz", shape=[256,256,256], vox_size=[1,1,1])
+    #os.system("flirt -in Bend1_wm_seed_mask.nii.gz -ref HeaderImage.nii.gz -applyxfm -init Transform.mat -out Final.nii")
+
+    #os.system("flirt -in Final.nii.gz -ref fa_resamp.nii.gz -out FinalFix.nii")
+
+    workflow = pe.Workflow(name=name)
+
+    workflow.connect([(inputnode, coregister_moving_to_fixed,[("moving_image","in_file")])])
+    workflow.connect([(inputnode, coregister_moving_to_fixed,[("fixed_image","reference")])])
+    workflow.connect([(coregister_moving_to_fixed, fix_FOV_in_matrix,[("out_matrix_file","in_matrix")])])
+    workflow.connect([(inputnode, fix_FOV_in_matrix,[("moving_image","orig_img")])])
+    workflow.connect([(inputnode, fix_FOV_in_matrix,[("fixed_image","target_img")])])
+
+    workflow.connect([(inputnode, apply_fixed_matrix,[("moving_image","in_file")])])
+    workflow.connect([(fix_FOV_in_matrix, apply_fixed_matrix,[("out_matrix","in_matrix_file")])])
+    workflow.connect([(fix_FOV_in_matrix, apply_fixed_matrix,[("out_image","reference")])])
+
+    workflow.connect([(inputnode, resample_fixed_to_moving,[('fixed_image','in_file')])])
+    workflow.connect([(inputnode, resample_fixed_to_moving,[('moving_image','reslice_like')])])
+    workflow.connect([(resample_fixed_to_moving, final_rigid_reg_to_fixed,[('out_file','reference')])])
+    workflow.connect([(apply_fixed_matrix, final_rigid_reg_to_fixed,[('out_file','in_file')])])
+
+    workflow.connect([(final_rigid_reg_to_fixed, outputnode,[('out_file','out_file')])])
+    return workflow
 
 def create_reg_and_label_wf(name="reg_wf"):
     inputnode = pe.Node(
@@ -37,12 +93,16 @@ def create_reg_and_label_wf(name="reg_wf"):
     rois_to_dwispace.inputs.apply_xfm = True
     rois_to_dwispace.inputs.interp = 'nearestneighbour'
 
-    coreg_noresamp = pe.Node(interface=fsl.FLIRT(dof=12), name = 'coreg_noresamp')
-    coreg_noresamp.inputs.cost = ('normmi')
-    coreg_noresamp.inputs.no_resample = True
-
     invertxfm = pe.Node(interface=fsl.ConvertXFM(), name = 'invertxfm')
     invertxfm.inputs.invert_xfm = True
+
+    coreg_resamp = pe.Node(interface=fsl.FLIRT(dof=12), name = 'coreg_resamp')
+    coreg_resamp.inputs.cost = ('normmi')
+    coreg_resamp.inputs.interp = 'trilinear'
+
+    resample_fa = pe.Node(interface=fs.MRIConvert(), name = 'resample_fa')
+    resample_fa.inputs.out_file = "fa_resamp.nii.gz"
+    resample_fa.inputs.out_type = 'nii'
 
     dmn_labels_if = util.Function(input_names=["in_file", "out_filename"],
                                   output_names=["out_file"], function=dmn_labels_combined)
@@ -53,17 +113,34 @@ def create_reg_and_label_wf(name="reg_wf"):
         [(inputnode, dmn_labelling, [(('subject_id', add_subj_name_to_rois), 'out_filename')])])
     workflow.connect([(inputnode, dmn_labelling, [("aparc_aseg", "in_file")])])
 
-    workflow.connect([(inputnode, coregister,[("fa","in_file")])])
-    workflow.connect([(inputnode, coregister,[('wm_mask','reference')])])
+    workflow.connect([(inputnode, coregister,[("wm_mask","in_file")])])
+    workflow.connect([(inputnode, coregister,[('fa','reference')])])
     workflow.connect([(coregister, invertxfm,[("out_matrix_file","in_file")])])
 
-    workflow.connect([(inputnode, coreg_noresamp,[("wm_mask","in_file")])])
-    workflow.connect([(inputnode, coreg_noresamp,[('fa','reference')])])
+    workflow.connect([(inputnode, coreg_resamp,[("wm_mask","in_file")])])
+    workflow.connect([(resample_fa, coreg_resamp,[('out_file','reference')])])
+
+    coreg_resamp = pe.Node(interface=fixmat_interface(dof=12), name = 'coreg_resamp')
+    coreg_resamp.inputs.cost = ('normmi')
+    coreg_resamp.inputs.interp = 'trilinear'
+
+    coreg_resamp = pe.Node(interface=fsl.FLIRT(dof=12), name = 'coreg_resamp')
+    coreg_resamp.inputs.cost = ('normmi')
+    coreg_resamp.inputs.interp = 'trilinear'
+
+    #os.system("flirt -in Bend1_wm_seed_mask.nii.gz -ref HeaderImage.nii.gz -applyxfm -init Transform.mat -out Final.nii")
+
+    #os.system("flirt -in Final.nii.gz -ref fa_resamp.nii.gz -out FinalFix.nii")
+
+    #workflow.connect([(dmn_labelling, rois_to_dwispace, [("out_file", "in_file")])])
+    #workflow.connect([(resample_fa, rois_to_dwispace, [("out_file", "reference")])])
 
     workflow.connect([(dmn_labelling, rois_to_dwispace, [("out_file", "in_file")])])
-    workflow.connect([(inputnode, rois_to_dwispace, [("fa", "reference")])])
-    workflow.connect([(coreg_noresamp, rois_to_dwispace,
-        [('out_matrix_file','in_matrix_file')])])
+    # Only to specify FOV and voxel size
+    workflow.connect([(inputnode, resample_fa, [("fa", "in_file")])])
+    workflow.connect([(dmn_labelling, resample_fa, [("out_file", "reslice_like")])])
+    workflow.connect([(resample_fa, rois_to_dwispace, [("out_file", "reference")])])
+    workflow.connect([(coreg_resamp, rois_to_dwispace, [('out_matrix_file','in_matrix_file')])])
 
     workflow.connect(
         [(dmn_labelling, outputnode, [("out_file", "rois")])])
