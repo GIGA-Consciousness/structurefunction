@@ -46,7 +46,19 @@ datasource.inputs.sort_filelist = True
 datasink = pe.Node(interface=nio.DataSink(), name="datasink")
 datasink.inputs.base_directory = op.abspath(name)
 
+# For testing
+datasink.overwrite = True
+
 dwi = anatomically_constrained_tracking()
+
+# For C.H.U. Liege Siemens Allegra 3T
+dwi.inputs.fsl2mrtrix.invert_x = True
+dwi.inputs.fsl2mrtrix.invert_y = False
+dwi.inputs.fsl2mrtrix.invert_z = False
+
+# Set a number of tracks
+dwi.inputs.CSDstreamtrack.desired_number_of_tracks = 10000
+dwi.inputs.CSDstreamtrack.minimum_tract_length = 10
 
 workflow = pe.Workflow(name=name)
 workflow.base_dir = name

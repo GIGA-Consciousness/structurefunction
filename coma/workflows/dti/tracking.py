@@ -41,7 +41,7 @@ def anatomically_constrained_tracking(name="fiber_tracking", lmax=4):
     '''
 
     fsl2mrtrix = pe.Node(interface=mrtrix.FSL2MRTrix(), name='fsl2mrtrix')
-    fsl2mrtrix.inputs.invert_y = True
+    #fsl2mrtrix.inputs.invert_y = True
 
     estimateresponse = pe.Node(interface=mrtrix.EstimateResponseForSH(),
                                name='estimateresponse')
