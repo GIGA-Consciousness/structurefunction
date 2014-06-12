@@ -479,8 +479,8 @@ def rewrite_mat_for_applyxfm(in_matrix, orig_img, target_img, shape=[256,256,256
     print("Corrected Translation")
     print(trans_matrix[0:3,-1])
     
-    out_matrix = op.abspath("Transform.mat")
-    np.savetxt(out_matrix, trans_matrix)
+    out_matrix_file = op.abspath("Transform.mat")
+    np.savetxt(out_matrix_file, trans_matrix)
 
     hdr = nb.Nifti1Header()
     affine = np.eye(4)
@@ -493,7 +493,7 @@ def rewrite_mat_for_applyxfm(in_matrix, orig_img, target_img, shape=[256,256,256
     out_image = op.abspath("HeaderImage.nii.gz")
     img = nb.Nifti1Image(dataobj=np.empty((shape)), affine=affine, header=hdr)
     nb.save(img, out_image)
-    return out_image, out_matrix
+    return out_image, out_matrix_file
 
 
 def translate_image(in_file, x=0, y=0, z=0, affine_from=None):

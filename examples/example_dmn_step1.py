@@ -57,10 +57,35 @@ workflow.connect([(datasource, dmnwf, [('bvecs', 'inputnode.bvecs')])])
 workflow.connect([(datasource, dmnwf, [('bvals', 'inputnode.bvals')])])
 workflow.connect([(datasource, dmnwf, [('fdgpet', 'inputnode.fdgpet')])])
 
-# workflow.connect([(dmnwf, datasink, [("outputnode.dwi_to_t1_matrix", "subject_id.@dwi_to_t1_matrix"),
-#                                    ("outputnode.t1_to_dwi_matrix", "subject_id.@t1_to_dwi_matrix"),
-#                                    ("outputnode.rois_to_dwi", "subject_id.@rois_to_dwi"),
-#                                    ("outputnode.rois", "subject_id.@rois"),
-#                                    ])])
+workflow.connect([(dmnwf, datasink, [("outputnode.t1", "subject_id.@t1"),
+                                       ("outputnode.wm_prob", "subject_id.@wm_prob"),
+                                       ("outputnode.gm_prob", "subject_id.@gm_prob"),
+                                       ("outputnode.csf_prob", "subject_id.@csf_prob"),
+                                       ("outputnode.single_fiber_mask", "subject_id.@single_fiber_mask"),
+                                       ("outputnode.fa", "subject_id.@fa"),
+                                       ("outputnode.rgb_fa", "subject_id.@rgb_fa"),
+                                       ("outputnode.md", "subject_id.@md"),
+                                       ("outputnode.mode", "subject_id.@mode"),
+                                       ("outputnode.t1_brain", "subject_id.@t1_brain"),
+                                       ("outputnode.wm_mask", "subject_id.@wm_mask"),
+                                       ("outputnode.term_mask", "subject_id.@term_mask"),
+                                       ("outputnode.aparc_aseg", "subject_id.@aparc_aseg"),
+                                       ("outputnode.tissue_class_files", "subject_id.@tissue_class_files"),
+                                       ])])
+
+workflow.connect([(dmnwf, datasink, [("outputnode.rois", "subject_id.@rois"),
+                                       ("outputnode.rois_to_dwi", "subject_id.@rois_to_dwi"),
+                                       ("outputnode.wmmask_to_dwi", "subject_id.@wmmask_to_dwi"),
+                                       ("outputnode.termmask_to_dwi", "subject_id.@termmask_to_dwi"),
+                                       ("outputnode.dwi_to_t1_matrix", "subject_id.@dwi_to_t1_matrix"),
+                                       ])])
+
+workflow.connect([(dmnwf, datasink, [("outputnode.pet_to_t1", "subject_id.@pet_to_t1"),
+                                       ("outputnode.corrected_pet_to_t1", "subject_id.@corrected_pet_to_t1"),
+                                       ("outputnode.pet_results_npz", "subject_id.@pet_results_npz"),
+                                       ("outputnode.pet_results_mat", "subject_id.@pet_results_mat"),
+                                       ])])
+
+workflow.write_graph()
 workflow.run()
 #workflow.run(plugin='MultiProc', plugin_args={'n_procs' : 3})

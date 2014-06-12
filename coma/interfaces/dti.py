@@ -52,6 +52,8 @@ def nonlinfit_fn(dwi, bvecs, bvals, base_name):
 
     evecs = tenfit.evecs.astype(np.float32)
     mode = tenfit.mode.astype(np.float32)
+    mode = np.nan_to_num(mode)
+
 
     # Write tensor as a 4D Nifti image with the original affine
     tensor_fit_img = nb.Nifti1Image(tensor_data.astype(np.float32), dwi_affine)

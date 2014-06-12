@@ -67,7 +67,9 @@ workflow.connect([(dwi, datasink, [("outputnode.t1_brain", "subject_id.@t1_brain
                                    ("outputnode.term_mask", "subject_id.@term_mask"),
                                    ("outputnode.aparc_aseg", "subject_id.@aparc_aseg"),
                                    ])])
+
 workflow.config['execution'] = {'remove_unnecessary_outputs': 'false',
                                    'hash_method': 'timestamp'}
+workflow.write_graph()
 workflow.run()
 #workflow.run(plugin='MultiProc', plugin_args={'n_procs' : 3})

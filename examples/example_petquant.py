@@ -15,9 +15,9 @@ data_path = sample.data_path()
 subjects_dir = op.join(data_path, "subjects")
 output_dir = op.abspath('example_petquant')
 
-info = dict(pet_image=[['subject_id', 'petmr']],
+info = dict(pet_image=[['subject_id', 'subject_id', 'pet']],
             roi_image=[['subject_id', '*DMN_rois']],
-            t1_image=[['subject_id', '*T1']])
+            t1_image=[['subject_id', '*T1brain']])
 
 subject_list = ['Bend1']
 
@@ -30,7 +30,7 @@ datasource = pe.Node(interface=nio.DataGrabber(infields=['subject_id'],
 
 datasource.inputs.template = "%s/%s"
 datasource.inputs.base_directory = data_path
-datasource.inputs.field_template = dict(pet_image='data/%s/%s.nii.gz',
+datasource.inputs.field_template = dict(pet_image='data/%s/%s_%s.nii.gz',
                                         roi_image='data/%s/%s.nii.gz',
                                         t1_image='data/%s/%s.nii.gz')
 datasource.inputs.template_args = info
