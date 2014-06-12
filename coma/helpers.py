@@ -4,6 +4,7 @@ import nibabel as nb
 import numpy as np
 from nipype.utils.filemanip import split_filename
 
+
 def nifti_to_analyze(nii):
     nifti = nb.load(nii)
     if nii[-3:] == '.gz':

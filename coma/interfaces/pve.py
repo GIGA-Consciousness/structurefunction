@@ -73,7 +73,7 @@ def fix_roi_values_freesurferLUT(roi_image, white_matter_file, csf_file, prob_th
     image = nb.load(roi_image)
     data = image.get_data()
 
-    assert (data.shape == wm_data.shape == csf_data.shape)
+    assert(data.shape == wm_data.shape == csf_data.shape)
     data[np.where(wm_labels > 0)] = white_matter_default
     data[np.where(csf_labels > 0)] = csf_default
 
@@ -119,13 +119,15 @@ def fix_roi_values_freesurferLUT(roi_image, white_matter_file, csf_file, prob_th
     nb.save(fixed, fixed_roi_image)
     return fixed_roi_image, wm_label_file, csf_label_file, remap_dict
 
-def fix_roi_values_noLUT(roi_image, white_matter_file, csf_file, prob_thresh):
+def fix_roi_values_noLUT(roi_image, gm_file, white_matter_file, csf_file, prob_thresh):
     from coma.helpers import prepare_for_uint8
     _, name, _ = split_filename(roi_image)
 
     white_matter_default = 2
     csf_default = 3
 
+    gm_image = nb.load(gm_file)
+    gm_data = gm_image.get_data()
     wm_image = nb.load(white_matter_file)
     wm_data = wm_image.get_data()
     csf_image = nb.load(csf_file)
@@ -134,7 +136,7 @@ def fix_roi_values_noLUT(roi_image, white_matter_file, csf_file, prob_thresh):
     image = nb.load(roi_image)
     data = image.get_data()
 
-    assert (data.shape == wm_data.shape == csf_data.shape)
+    assert(data.shape == gm_data.shape == wm_data.shape == csf_data.shape)
 
     data_uint8, remap_dict = prepare_for_uint8(data, ignore=[0])
     data_uint8 = data_uint8.astype(np.uint8)
@@ -168,6 +170,16 @@ def fix_roi_values_noLUT(roi_image, white_matter_file, csf_file, prob_thresh):
 
     hdr = image.get_header()
 
+    import ipdb
+    ipdb.set_trace()
+    unlabelled = np.where((gm_data > prob_thresh) & (data_uint8 == 0))[0]
+
+    # Create extra ROI if there are extra GM regions in the GM mask
+    if len(unlabelled) > 0:
+        highestlabel = np.max(data_uint8)
+        assert(highestlabel != 255)
+        data_uint8[unlabelled] = highestlabel + 1
+
     fixed = nb.Nifti1Image(
         dataobj=data_uint8, affine=image.get_affine(), header=hdr)
     _, name, _ = split_filename(roi_image)
@@ -177,7 +189,7 @@ def fix_roi_values_noLUT(roi_image, white_matter_file, csf_file, prob_thresh):
     return fixed_roi_image, wm_label_file, csf_label_file, remap_dict
 
 
-def fix_roi_values(roi_image, white_matter_file, csf_file, use_fs_LUT=True, prob_thresh=0.5):
+def fix_roi_values(roi_image, gm_file, white_matter_file, csf_file, use_fs_LUT=True, prob_thresh=0.5):
     '''
     Changes ROI values to prevent values equal to 1, 2,
     or 3. These are reserved for GM/WM/CSF in the PVELab
@@ -187,7 +199,7 @@ def fix_roi_values(roi_image, white_matter_file, csf_file, use_fs_LUT=True, prob
     if use_fs_LUT:
         fixed_roi_image, wm_label_file, csf_label_file, remap_dict = fix_roi_values_freesurferLUT(roi_image, white_matter_file, csf_file, prob_thresh)
     else:
-        fixed_roi_image, wm_label_file, csf_label_file, remap_dict = fix_roi_values_noLUT(roi_image, white_matter_file, csf_file, prob_thresh)
+        fixed_roi_image, wm_label_file, csf_label_file, remap_dict = fix_roi_values_noLUT(roi_image, gm_file, white_matter_file, csf_file, prob_thresh)
 
     return fixed_roi_image, wm_label_file, csf_label_file, remap_dict
 
@@ -203,6 +215,7 @@ def write_config_dat(roi_file, LUT=None, remap_dict=None):
     IDs = np.unique(data)
     IDs.sort()
     IDs = IDs.tolist()
+
 
     for x in xrange(4):
         if x in IDs:
@@ -319,7 +332,9 @@ class PartialVolumeCorrection(BaseInterface):
         iflogger.info("Writing to %s" % gm_path)
 
         fixed_roi_file, fixed_wm, fixed_csf, remap_dict = fix_roi_values(
-            self.inputs.roi_file, self.inputs.white_matter_file, self.inputs.csf_file, self.inputs.use_fs_LUT)
+            self.inputs.roi_file, self.inputs.grey_matter_file, 
+            self.inputs.white_matter_file, self.inputs.csf_file, self.inputs.use_fs_LUT)
+
         rois_path, _ = nifti_to_analyze(fixed_roi_file)
         iflogger.info("Writing to %s" % rois_path)
         iflogger.info("Writing to %s" % fixed_wm)
