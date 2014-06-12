@@ -796,9 +796,7 @@ def create_precoth_pipeline_step2(name="precoth_step2", tractography_type='proba
     workflow.connect([(inputnode, coregister,[('wm_mask','reference')])])
     workflow.connect([(inputnode, tck2trk,[("fa","image_file")])])
     
-    # MAY NEED TO CHANGE to T1
     workflow.connect([(inputnode, tck2trk,[("wm_mask","registration_image_file")])])
-    #
     workflow.connect([(coregister, tck2trk,[("out_matrix_file","matrix_file")])])
     
     workflow.connect([(coregister, invertxfm,[("out_matrix_file","in_file")])])

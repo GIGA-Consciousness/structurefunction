@@ -120,11 +120,11 @@ def create_pet_quantification_wf(name="petquant", segment_t1=True):
 
     if segment_t1:
         workflow.connect(
-            [(fast_seg_T1, applyxfm_gm, [(('partial_volume_files', select_GM), 'in_file')])])
+            [(fast_seg_T1, applyxfm_gm, [(('probability_maps', select_GM), 'in_file')])])
         workflow.connect(
-            [(fast_seg_T1, applyxfm_wm, [(('partial_volume_files', select_WM), 'in_file')])])
+            [(fast_seg_T1, applyxfm_wm, [(('probability_maps', select_WM), 'in_file')])])
         workflow.connect(
-            [(fast_seg_T1, applyxfm_csf, [(('partial_volume_files', select_CSF), 'in_file')])])
+            [(fast_seg_T1, applyxfm_csf, [(('probability_maps', select_CSF), 'in_file')])])
     else:
         workflow.connect(
             [(inputnode, applyxfm_gm, [('gm_prob', 'in_file')])])
@@ -152,7 +152,7 @@ def create_pet_quantification_wf(name="petquant", segment_t1=True):
         [(applyxfm_rois, pve_correction, [('out_file', 'roi_file')])])
     workflow.connect(
         [(pve_correction, applyxfm_CorrectedPET, [('mueller_gartner_rousset', 'in_file')])])
-    
+
     workflow.connect(
         [(inputnode, applyxfm_CorrectedPET, [('t1', 'reference')])])
     workflow.connect(
