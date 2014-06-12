@@ -52,6 +52,16 @@ datasink.inputs.base_directory = op.abspath(name)
 
 dmnwf = create_dmn_pipeline_step2()
 
+# For C.H.U. Liege Siemens Allegra 3T
+dmnwf.inputs.tracking.fsl2mrtrix.invert_x = True
+dmnwf.inputs.tracking.fsl2mrtrix.invert_y = False
+dmnwf.inputs.tracking.fsl2mrtrix.invert_z = False
+
+# Set a number of tracks
+dmnwf.inputs.tracking.CSDstreamtrack.desired_number_of_tracks = 10000
+dmnwf.inputs.tracking.CSDstreamtrack.minimum_tract_length = 10
+
+
 workflow = pe.Workflow(name=name)
 workflow.base_dir = name
 
