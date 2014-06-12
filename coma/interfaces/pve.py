@@ -170,8 +170,6 @@ def fix_roi_values_noLUT(roi_image, gm_file, white_matter_file, csf_file, prob_t
 
     hdr = image.get_header()
 
-    import ipdb
-    ipdb.set_trace()
     unlabelled = np.where((gm_data > prob_thresh) & (data_uint8 == 0))[0]
 
     # Create extra ROI if there are extra GM regions in the GM mask
