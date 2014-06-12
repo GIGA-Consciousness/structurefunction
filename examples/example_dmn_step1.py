@@ -7,6 +7,7 @@ import nipype.interfaces.fsl as fsl
 fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
 
 from coma.workflows.dmnwf import create_dmn_pipeline_step1
+from coma.helpers import return_subject_data
 
 from coma.datasets import sample
 data_path = sample.data_path()
@@ -38,6 +39,11 @@ datasource.inputs.field_template = dict(dwi='data/%s/%s.nii.gz',
 datasource.inputs.template_args = info
 datasource.inputs.sort_filelist = True
 
+get_subject_data_interface = util.Function(input_names=["subject_id", "data_file"],
+  output_names=["dose", "weight", "delay", "glycemie", "scan_time"], function=return_subject_data)
+grab_subject_data = pe.Node(interface=get_subject_data_interface, name='grab_subject_data')
+grab_subject_data.inputs.data_file = op.join(data_path, "SubjectData.csv")
+
 datasink = pe.Node(interface=nio.DataSink(), name="datasink")
 datasink.inputs.base_directory = op.abspath(name)
 
@@ -48,6 +54,13 @@ workflow.base_dir = name
 
 workflow.connect([(infosource, datasource, [('subject_id', 'subject_id')])])
 workflow.connect([(infosource, datasink, [('subject_id', '@subject_id')])])
+workflow.connect([(infosource, grab_subject_data,[('subject_id', 'subject_id')])])
+
+workflow.connect([(grab_subject_data, dmnwf,[('dose', 'inputnode.dose')])])
+workflow.connect([(grab_subject_data, dmnwf,[('weight', 'inputnode.weight')])])
+workflow.connect([(grab_subject_data, dmnwf,[('delay', 'inputnode.delay')])])
+workflow.connect([(grab_subject_data, dmnwf,[('glycemie', 'inputnode.glycemie')])])
+workflow.connect([(grab_subject_data, dmnwf,[('scan_time', 'inputnode.scan_time')])])
 
 workflow.connect([(infosource, dmnwf, [('subject_id', 'inputnode.subject_id')])])
 workflow.connect([(infosource, dmnwf, [('subjects_dir', 'inputnode.subjects_dir')])])
@@ -80,11 +93,18 @@ workflow.connect([(dmnwf, datasink, [("outputnode.rois", "subject_id.@rois"),
                                        ("outputnode.dwi_to_t1_matrix", "subject_id.@dwi_to_t1_matrix"),
                                        ])])
 
-workflow.connect([(dmnwf, datasink, [("outputnode.pet_to_t1", "subject_id.@pet_to_t1"),
-                                       ("outputnode.corrected_pet_to_t1", "subject_id.@corrected_pet_to_t1"),
-                                       ("outputnode.pet_results_npz", "subject_id.@pet_results_npz"),
-                                       ("outputnode.pet_results_mat", "subject_id.@pet_results_mat"),
+workflow.connect([(dmnwf, datasink, [("outputnode.SUV_pet_to_t1", "subject_id.SUV.@pet_to_t1"),
+                                       ("outputnode.SUV_corrected_pet_to_t1", "subject_id.SUV.@corrected_pet_to_t1"),
+                                       ("outputnode.SUV_pet_results_npz", "subject_id.SUV.@pet_results_npz"),
+                                       ("outputnode.SUV_pet_results_mat", "subject_id.SUV.@pet_results_mat"),
                                        ])])
+
+workflow.connect([(dmnwf, datasink, [("outputnode.AIF_pet_to_t1", "subject_id.AIF.@pet_to_t1"),
+                                       ("outputnode.AIF_corrected_pet_to_t1", "subject_id.AIF.@corrected_pet_to_t1"),
+                                       ("outputnode.AIF_pet_results_npz", "subject_id.AIF.@pet_results_npz"),
+                                       ("outputnode.AIF_pet_results_mat", "subject_id.AIF.@pet_results_mat"),
+                                       ])])
+
 
 workflow.write_graph()
 workflow.run()

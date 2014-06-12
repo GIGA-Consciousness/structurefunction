@@ -11,6 +11,7 @@ from coma.workflows.dmn import create_paired_tract_analysis_wf
 from coma.workflows.pet import create_pet_quantification_wf
 from coma.labels import dmn_labels_combined
 from coma.helpers import add_subj_name_to_rois, rewrite_mat_for_applyxfm
+from coma.interfaces.glucose import CMR_glucose, calculate_SUV
 
 def coreg_without_resample(name="highres_coreg"):
     inputnode = pe.Node(
@@ -111,6 +112,34 @@ def create_reg_and_label_wf(name="reg_wf"):
         name = 'invertxfm')
     invertxfm.inputs.invert_xfm = True
 
+
+    '''
+    Define renaming nodes
+    '''
+    rename_t1_to_dwi_mat = pe.Node(interface=util.Rename(format_string = "%(subject_id)s_t1_to_dwi_matrix"),
+        name = 'rename_t1_to_dwi_mat')
+    rename_t1_to_dwi_mat.inputs.keep_ext = True
+
+    rename_dwi_to_t1_mat = pe.Node(interface=util.Rename(format_string = "%(subject_id)s_dwi_to_t1_matrix"),
+        name = 'rename_dwi_to_t1_mat')
+    rename_dwi_to_t1_mat.inputs.keep_ext = True
+
+    rename_rois_dwi = pe.Node(interface=util.Rename(format_string = "%(subject_id)s_rois_dwi"),
+        name = 'rename_rois_dwi')
+    rename_rois_dwi.inputs.keep_ext = True
+
+    rename_termmask_dwi = pe.Node(interface=util.Rename(format_string = "%(subject_id)s_term_mask_dwi"),
+        name = 'rename_termmask_dwi')
+    rename_termmask_dwi.inputs.keep_ext = True
+    
+    rename_wmmask_dwi = pe.Node(interface=util.Rename(format_string = "%(subject_id)s_wm_mask_dwi"),
+        name = 'rename_wmmask_dwi')
+    rename_wmmask_dwi.inputs.keep_ext = True
+
+    rename_highres_matrix_file = pe.Node(interface=util.Rename(format_string = "%(subject_id)s_t1_to_dwi_NoResample"),
+        name = 'rename_highres_matrix_file')
+    rename_highres_matrix_file.inputs.keep_ext = True
+
     workflow = pe.Workflow(name=name)
     workflow.connect(
         [(inputnode, dmn_labelling, [(('subject_id', add_subj_name_to_rois), 'out_filename')])])
@@ -130,20 +159,53 @@ def create_reg_and_label_wf(name="reg_wf"):
     workflow.connect(
         [(align_wmmask_to_dwi, invertxfm, [("outputnode.lowres_matrix_file", "in_file")])])
 
+
+
     workflow.connect(
         [(dmn_labelling, outputnode, [("out_file", "rois")])])
+
     workflow.connect(
-        [(align_wmmask_to_dwi, outputnode, [("outputnode.lowres_matrix_file", "t1_to_dwi_matrix")])])
+        [(inputnode, rename_t1_to_dwi_mat, [("subject_id", "subject_id")])])
     workflow.connect(
-        [(invertxfm, outputnode, [("out_file", "dwi_to_t1_matrix")])])
+        [(align_wmmask_to_dwi, rename_t1_to_dwi_mat, [("outputnode.lowres_matrix_file", "in_file")])])
     workflow.connect(
-        [(rois_to_dwi, outputnode, [("out_file", "rois_to_dwi")])])
+        [(rename_t1_to_dwi_mat, outputnode, [("out_file", "t1_to_dwi_matrix")])])
+
+
     workflow.connect(
-        [(termmask_to_dwi, outputnode, [("out_file", "termmask_to_dwi")])])
+        [(inputnode, rename_dwi_to_t1_mat, [("subject_id", "subject_id")])])
     workflow.connect(
-        [(align_wmmask_to_dwi, outputnode, [("outputnode.out_file", "wmmask_to_dwi")])])
+        [(invertxfm, rename_dwi_to_t1_mat, [("out_file", "in_file")])])
     workflow.connect(
-        [(align_wmmask_to_dwi, outputnode, [("outputnode.highres_matrix_file", "highres_t1_to_dwi_matrix")])])
+        [(rename_dwi_to_t1_mat, outputnode, [("out_file", "dwi_to_t1_matrix")])])
+
+    workflow.connect(
+        [(inputnode, rename_rois_dwi, [("subject_id", "subject_id")])])
+    workflow.connect(
+        [(rois_to_dwi, rename_rois_dwi, [("out_file", "in_file")])])
+    workflow.connect(
+        [(rename_rois_dwi, outputnode, [("out_file", "rois_to_dwi")])])
+
+    workflow.connect(
+        [(inputnode, rename_termmask_dwi, [("subject_id", "subject_id")])])
+    workflow.connect(
+        [(termmask_to_dwi, rename_termmask_dwi, [("out_file", "in_file")])])
+    workflow.connect(
+        [(rename_termmask_dwi, outputnode, [("out_file", "termmask_to_dwi")])])
+
+    workflow.connect(
+        [(inputnode, rename_wmmask_dwi, [("subject_id", "subject_id")])])
+    workflow.connect(
+        [(align_wmmask_to_dwi, rename_wmmask_dwi, [("outputnode.out_file", "in_file")])])
+    workflow.connect(
+        [(rename_wmmask_dwi, outputnode, [("out_file", "wmmask_to_dwi")])])
+
+    workflow.connect(
+        [(inputnode, rename_highres_matrix_file, [("subject_id", "subject_id")])])
+    workflow.connect(
+        [(align_wmmask_to_dwi, rename_highres_matrix_file, [("outputnode.highres_matrix_file", "in_file")])])
+    workflow.connect(
+        [(rename_highres_matrix_file, outputnode, [("out_file", "highres_t1_to_dwi_matrix")])])
     return workflow
 
 
@@ -154,7 +216,12 @@ def create_dmn_pipeline_step1(name="dmn_step1", auto_reorient=True):
                                                  "dwi",
                                                  "bvecs",
                                                  "bvals",
-                                                 "fdgpet"]),
+                                                 "fdgpet",
+                                                 "dose",
+                                                 "weight",
+                                                 "delay",
+                                                 "glycemie",
+                                                 "scan_time"]),
         name="inputnode")
 
     outputnode = pe.Node(
@@ -181,17 +248,41 @@ def create_dmn_pipeline_step1(name="dmn_step1", auto_reorient=True):
                                                  "termmask_to_dwi",
                                                  "dwi_to_t1_matrix",
 
-                                                 # Outputs from the PET workflow
-                                                 "pet_to_t1",
-                                                 "corrected_pet_to_t1",
-                                                 "pet_results_npz",
-                                                 "pet_results_mat"
+                                                 # Outputs from the PET workflow after SUV calculation
+                                                 "SUV_pet_to_t1",
+                                                 "SUV_corrected_pet_to_t1",
+                                                 "SUV_pet_results_npz",
+                                                 "SUV_pet_results_mat",
+
+                                                 # Outputs from the PET workflow using approx. arterial
+                                                 # input function (AIF)
+
+                                                 "AIF_pet_to_t1",
+                                                 "AIF_corrected_pet_to_t1",
+                                                 "AIF_pet_results_npz",
+                                                 "AIF_pet_results_mat",
+
+                                                 # T1 in DWI space for reference
+                                                 "t1_to_dwi",
                                                  ]),
         name="outputnode")
 
+    t1_to_dwi = pe.Node(interface=fsl.ApplyXfm(),
+        name = 't1_to_dwi')
+
+    compute_cmr_glc_interface = util.Function(input_names=["in_file", "dose", "weight", "delay",
+        "glycemie", "scan_time"], output_names=["out_file", "cax2", "mecalc", "denom"], function=CMR_glucose)
+    compute_AIF_PET = pe.Node(interface=compute_cmr_glc_interface, name='compute_AIF_PET')
+
+    compute_SUV_interface = util.Function(input_names=["in_file", "dose", "weight", "delay",
+        "scan_time", "isotope", 'height', "glycemie"],
+        output_names=["out_file"], function=calculate_SUV)
+    compute_SUV_norm_glycemia = pe.Node(interface=compute_SUV_interface, name='compute_SUV_norm_glycemia')
+
     dtiproc = damaged_brain_dti_processing("dtiproc")
     reg_label = create_reg_and_label_wf("reg_label")
-    petquant = create_pet_quantification_wf("petquant", segment_t1=False)
+    petquant_SUV = create_pet_quantification_wf("petquant_SUV", segment_t1=False)
+    petquant_AIF = create_pet_quantification_wf("petquant_AIF", segment_t1=False)
 
     workflow = pe.Workflow(name=name)
     workflow.base_output_dir = name
@@ -212,27 +303,52 @@ def create_dmn_pipeline_step1(name="dmn_step1", auto_reorient=True):
                                             ("outputnode.aparc_aseg", "inputnode.aparc_aseg"),
                       ])])
 
+    workflow.connect([(reg_label, t1_to_dwi, [("outputnode.t1_to_dwi_matrix", "in_matrix_file")])])
+    workflow.connect([(dtiproc, t1_to_dwi, [("outputnode.t1", "in_file")])])
+    workflow.connect([(dtiproc, t1_to_dwi, [("outputnode.fa", "reference")])])
 
+    workflow.connect([(inputnode, compute_SUV_norm_glycemia, [("fdgpet", "in_file"),
+                                                   ("dose", "dose"),
+                                                   ("weight", "weight"),
+                                                   ("delay", "delay"),
+                                                   ("scan_time", "scan_time"),
+                                                   ])])
+    # If this line is commented out, the SUV will not be divided by the glycemia
+    workflow.connect([(inputnode, compute_SUV_norm_glycemia, [("glycemie", "glycemie")])])
 
-    workflow.connect([(inputnode, petquant, [("fdgpet", "inputnode.pet")])])
-    workflow.connect([(reg_label, petquant, [("outputnode.rois", "inputnode.rois")])])
-    workflow.connect([(dtiproc, petquant, [("outputnode.t1", "inputnode.t1"),
+    # This is for the arterial input function approximation for the FDG uptake
+    workflow.connect([(inputnode, compute_AIF_PET, [("fdgpet", "in_file"),
+                                                   ("dose", "dose"),
+                                                   ("weight", "weight"),
+                                                   ("delay", "delay"),
+                                                   ("glycemie", "glycemie"),
+                                                   ("scan_time", "scan_time"),
+                                                   ])])
+
+    workflow.connect([(dtiproc, petquant_SUV, [("outputnode.t1", "inputnode.t1"),
                                            ("outputnode.wm_prob", "inputnode.wm_prob"),
                                            ("outputnode.gm_prob", "inputnode.gm_prob"),
                                            ("outputnode.csf_prob", "inputnode.csf_prob"),
                                            ])])
 
-    # Something here connecting PET PVE-corrected images for SUV / SUR calculation ? 
-    # workflow.connect([(petquant, compute_cmr_glc, [("fdgpet", "in_file")])])
-    # workflow.connect([(inputnode, compute_cmr_glc, [("dose", "dose")])])
-    # workflow.connect([(inputnode, compute_cmr_glc, [("weight", "weight")])])
-    # workflow.connect([(inputnode, compute_cmr_glc, [("delay", "delay")])])
-    # workflow.connect([(inputnode, compute_cmr_glc, [("glycemie", "glycemie")])])
-    # workflow.connect([(inputnode, compute_cmr_glc, [("scan_time", "scan_time")])])
+    workflow.connect([(dtiproc, petquant_AIF, [("outputnode.t1", "inputnode.t1"),
+                                           ("outputnode.wm_prob", "inputnode.wm_prob"),
+                                           ("outputnode.gm_prob", "inputnode.gm_prob"),
+                                           ("outputnode.csf_prob", "inputnode.csf_prob"),
+                                           ])])
+
+    workflow.connect([(compute_SUV_norm_glycemia, petquant_SUV, [("out_file", "inputnode.pet")])])
+    workflow.connect([(reg_label, petquant_SUV, [("outputnode.rois", "inputnode.rois")])])
+
+    workflow.connect([(compute_AIF_PET, petquant_AIF, [("out_file", "inputnode.pet")])])
+    workflow.connect([(reg_label, petquant_AIF, [("outputnode.rois", "inputnode.rois")])])
+
 
     '''
     Connect outputnode
     '''
+
+    workflow.connect([(t1_to_dwi, outputnode, [("out_file", "t1_to_dwi")])])
 
     workflow.connect([(dtiproc, outputnode, [("outputnode.t1", "t1"),
                                            ("outputnode.wm_prob", "wm_prob"),
@@ -257,10 +373,16 @@ def create_dmn_pipeline_step1(name="dmn_step1", auto_reorient=True):
                                            ("outputnode.dwi_to_t1_matrix", "dwi_to_t1_matrix"),
                                            ])])
 
-    workflow.connect([(petquant, outputnode, [("outputnode.pet_to_t1", "pet_to_t1"),
-                                           ("outputnode.corrected_pet_to_t1", "corrected_pet_to_t1"),
-                                           ("outputnode.pet_results_npz", "pet_results_npz"),
-                                           ("outputnode.pet_results_mat", "pet_results_mat"),
+    workflow.connect([(petquant_SUV, outputnode, [("outputnode.pet_to_t1", "SUV_pet_to_t1"),
+                                           ("outputnode.corrected_pet_to_t1", "SUV_corrected_pet_to_t1"),
+                                           ("outputnode.pet_results_npz", "SUV_pet_results_npz"),
+                                           ("outputnode.pet_results_mat", "SUV_pet_results_mat"),
+                                           ])])
+
+    workflow.connect([(petquant_AIF, outputnode, [("outputnode.pet_to_t1", "AIF_pet_to_t1"),
+                                           ("outputnode.corrected_pet_to_t1", "AIF_corrected_pet_to_t1"),
+                                           ("outputnode.pet_results_npz", "AIF_pet_results_npz"),
+                                           ("outputnode.pet_results_mat", "AIF_pet_results_mat"),
                                            ])])
     return workflow
 

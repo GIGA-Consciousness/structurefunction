@@ -66,7 +66,7 @@ def CMR_glucose(in_file, dose, weight, delay, glycemie, scan_time=15):
     return out_file, cax2, mecalc, denom
 
 
-def calculate_SUV(in_file, dose, weight, delay, scan_time=15, isotope="F18", height=None):
+def calculate_SUV(in_file, dose, weight, delay, scan_time=15, isotope="F18", height=None, glycemie=None):
     '''
     Calculates standardized uptake value
 
@@ -111,6 +111,9 @@ def calculate_SUV(in_file, dose, weight, delay, scan_time=15, isotope="F18", hei
         SUV = data * np.power(2, (T / half_life)) / \
             (dose_mbq / (weight / 1000.))
 
+    if glycemie is not None:
+        SUV = SUV / glycemie
+    
     SUV_image = nb.Nifti1Image(dataobj=SUV, affine=image.get_affine())
     out_file = op.abspath(name + '_SUV.nii.gz')
     nb.save(SUV_image, out_file)
