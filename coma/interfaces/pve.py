@@ -411,8 +411,14 @@ class PartialVolumeCorrection(BaseInterface):
         PSF_img = glob.glob("pve_%s/r_volume_PSF.img" % foldername)[0]
         analyze_to_nifti(PSF_img)
 
-        rousset_mat_file = glob.glob(
-            "pve_%s/r_volume_Rousset.mat" % foldername)[0]
+        try:
+            rousset_mat_file = glob.glob(
+                "pve_%s/r_volume_Rousset.mat" % foldername)[0]
+        except IndexError:
+            # On Ubuntu using pve64, the matlab file is saved with a capital M
+            rousset_mat_file = glob.glob(
+                "pve_%s/r_volume_Rousset.Mat" % foldername)[0]
+
         shutil.copyfile(rousset_mat_file, op.abspath("r_volume_Rousset.mat"))
 
         results_text_file = glob.glob(
