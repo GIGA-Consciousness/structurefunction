@@ -262,11 +262,11 @@ def create_dmn_pipeline_step1(name="dmn_step1", scale_by_glycemia=True):
     t1_to_dwi = pe.Node(interface=fsl.ApplyXfm(),
         name = 't1_to_dwi')
 
-    compute_cmr_glc_interface = util.Function(input_names=["in_file", "dose", "weight", "delay",
+    compute_cmr_glc_interface = util.Function(input_names=["subject_id", "in_file", "dose", "weight", "delay",
         "glycemie", "scan_time"], output_names=["out_file", "cax2", "mecalc", "denom"], function=CMR_glucose)
     compute_AIF_PET = pe.Node(interface=compute_cmr_glc_interface, name='compute_AIF_PET')
 
-    compute_SUV_interface = util.Function(input_names=["in_file", "dose", "weight", "delay",
+    compute_SUV_interface = util.Function(input_names=["subject_id", "in_file", "dose", "weight", "delay",
         "scan_time", "isotope", 'height', "glycemie"],
         output_names=["out_file"], function=calculate_SUV)
     compute_SUV_norm_glycemia = pe.Node(interface=compute_SUV_interface, name='compute_SUV_norm_glycemia')
@@ -304,7 +304,8 @@ def create_dmn_pipeline_step1(name="dmn_step1", scale_by_glycemia=True):
     workflow.connect([(dtiproc, t1_to_dwi, [("outputnode.t1", "in_file")])])
     workflow.connect([(dtiproc, t1_to_dwi, [("outputnode.fa", "reference")])])
 
-    workflow.connect([(inputnode, compute_SUV_norm_glycemia, [("dose", "dose"),
+    workflow.connect([(inputnode, compute_SUV_norm_glycemia, [("subject_id", "subject_id"),
+                                                   ("dose", "dose"),
                                                    ("weight", "weight"),
                                                    ("delay", "delay"),
                                                    ("scan_time", "scan_time"),
@@ -314,7 +315,8 @@ def create_dmn_pipeline_step1(name="dmn_step1", scale_by_glycemia=True):
         workflow.connect([(inputnode, compute_SUV_norm_glycemia, [("glycemie", "glycemie")])])
 
     # This is for the arterial input function approximation for the FDG uptake
-    workflow.connect([(inputnode, compute_AIF_PET, [("dose", "dose"),
+    workflow.connect([(inputnode, compute_AIF_PET, [("subject_id", "subject_id"),
+                                                   ("dose", "dose"),
                                                    ("weight", "weight"),
                                                    ("delay", "delay"),
                                                    ("glycemie", "glycemie"),

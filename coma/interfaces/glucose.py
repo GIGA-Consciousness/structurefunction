@@ -120,7 +120,7 @@ def scale_PVC_matrix_fn(subject_id, in_file, dose, weight, delay, scan_time=15, 
 
 
 
-def CMR_glucose(in_file, dose, weight, delay, glycemie, scan_time=15):
+def CMR_glucose(subject_id, in_file, dose, weight, delay, glycemie, scan_time=15):
     '''
     Scales an image to the calculated cerebral metabolic rate of glucose
     using a standard arterial input curve
@@ -136,7 +136,6 @@ def CMR_glucose(in_file, dose, weight, delay, glycemie, scan_time=15):
     import os.path as op
     import numpy as np
     import nibabel as nb
-    from nipype.utils.filemanip import split_filename
 
     T = delay + scan_time
     k1 = 0.087
@@ -173,7 +172,6 @@ def CMR_glucose(in_file, dose, weight, delay, glycemie, scan_time=15):
     CAdivlumped = Ca / lumped
     cax2 = CAdivlumped
 
-    _, name, _ = split_filename(in_file)
     image = nb.load(in_file)
     data = image.get_data()
 
@@ -183,12 +181,12 @@ def CMR_glucose(in_file, dose, weight, delay, glycemie, scan_time=15):
     rescaled = data * slope + inter
     rescaled_image = nb.Nifti1Image(
         dataobj=rescaled, affine=image.get_affine())
-    out_file = op.abspath(name + '_CMRGLC2.nii.gz')
+    out_file = op.abspath(subject_id + '_CMRGLC2.nii.gz')
     nb.save(rescaled_image, out_file)
     return out_file, cax2, mecalc, denom
 
 
-def calculate_SUV(in_file, dose, weight, delay, scan_time=15, isotope="F18", height=None, glycemie=None):
+def calculate_SUV(subject_id, in_file, dose, weight, delay, scan_time=15, isotope="F18", height=None, glycemie=None):
     '''
     Calculates standardized uptake value
 
@@ -203,9 +201,7 @@ def calculate_SUV(in_file, dose, weight, delay, scan_time=15, isotope="F18", hei
     import os.path as op
     import numpy as np
     import nibabel as nb
-    from nipype.utils.filemanip import split_filename
 
-    _, name, _ = split_filename(in_file)
     image = nb.load(in_file)
     data = image.get_data()
 
@@ -237,6 +233,6 @@ def calculate_SUV(in_file, dose, weight, delay, scan_time=15, isotope="F18", hei
         SUV = SUV / glycemie
     
     SUV_image = nb.Nifti1Image(dataobj=SUV, affine=image.get_affine())
-    out_file = op.abspath(name + '_SUV.nii.gz')
+    out_file = op.abspath(subject_id + '_SUV.nii.gz')
     nb.save(SUV_image, out_file)
     return out_file
