@@ -171,12 +171,11 @@ def fix_roi_values_noLUT(roi_image, gm_file, white_matter_file, csf_file, prob_t
     hdr = image.get_header()
 
     unlabelled = np.where((gm_data > prob_thresh) & (data_uint8 == 0))[0]
-
     # Create extra ROI if there are extra GM regions in the GM mask
     if len(unlabelled) > 0:
         highestlabel = np.max(data_uint8)
         assert(highestlabel != 255)
-        data_uint8[unlabelled] = highestlabel + 1
+        data_uint8[np.where((gm_data > prob_thresh) & (data_uint8 == 0))] = highestlabel + 1
 
     fixed = nb.Nifti1Image(
         dataobj=data_uint8, affine=image.get_affine(), header=hdr)
@@ -187,7 +186,7 @@ def fix_roi_values_noLUT(roi_image, gm_file, white_matter_file, csf_file, prob_t
     return fixed_roi_image, wm_label_file, csf_label_file, remap_dict
 
 
-def fix_roi_values(roi_image, gm_file, white_matter_file, csf_file, use_fs_LUT=True, prob_thresh=0.5):
+def fix_roi_values(roi_image, gm_file, white_matter_file, csf_file, use_fs_LUT=True, prob_thresh=0.7):
     '''
     Changes ROI values to prevent values equal to 1, 2,
     or 3. These are reserved for GM/WM/CSF in the PVELab

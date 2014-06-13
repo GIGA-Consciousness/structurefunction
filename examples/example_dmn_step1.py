@@ -93,19 +93,15 @@ workflow.connect([(dmnwf, datasink, [("outputnode.rois", "subject_id.@rois"),
                                        ("outputnode.dwi_to_t1_matrix", "subject_id.@dwi_to_t1_matrix"),
                                        ])])
 
-workflow.connect([(dmnwf, datasink, [("outputnode.SUV_pet_to_t1", "subject_id.SUV.@pet_to_t1"),
-                                       ("outputnode.SUV_corrected_pet_to_t1", "subject_id.SUV.@corrected_pet_to_t1"),
-                                       ("outputnode.SUV_pet_results_npz", "subject_id.SUV.@pet_results_npz"),
-                                       ("outputnode.SUV_pet_results_mat", "subject_id.SUV.@pet_results_mat"),
-                                       ])])
-
-workflow.connect([(dmnwf, datasink, [("outputnode.AIF_pet_to_t1", "subject_id.AIF.@pet_to_t1"),
-                                       ("outputnode.AIF_corrected_pet_to_t1", "subject_id.AIF.@corrected_pet_to_t1"),
-                                       ("outputnode.AIF_pet_results_npz", "subject_id.AIF.@pet_results_npz"),
-                                       ("outputnode.AIF_pet_results_mat", "subject_id.AIF.@pet_results_mat"),
+workflow.connect([(dmnwf, datasink, [("outputnode.SUV_corrected_pet_to_t1", "subject_id.@SUV_corrected_pet_to_t1"),
+                                       ("outputnode.AIF_corrected_pet_to_t1", "subject_id.@AIF_corrected_pet_to_t1"),
+                                       ("outputnode.pet_results_npz", "subject_id.@pet_results_npz"),
+                                       ("outputnode.pet_results_mat", "subject_id.@pet_results_mat"),
                                        ])])
 
 
 workflow.write_graph()
+workflow.config['execution'] = {'remove_unnecessary_outputs': 'false',
+                                   'hash_method': 'timestamp'}
 workflow.run()
 #workflow.run(plugin='MultiProc', plugin_args={'n_procs' : 3})

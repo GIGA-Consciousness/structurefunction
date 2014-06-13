@@ -11,7 +11,7 @@ from coma.workflows.dmn import create_paired_tract_analysis_wf
 from coma.workflows.pet import create_pet_quantification_wf
 from coma.labels import dmn_labels_combined
 from coma.helpers import add_subj_name_to_rois, rewrite_mat_for_applyxfm
-from coma.interfaces.glucose import CMR_glucose, calculate_SUV
+from coma.interfaces.glucose import CMR_glucose, calculate_SUV, scale_PVC_matrix_fn
 
 def coreg_without_resample(name="highres_coreg"):
     inputnode = pe.Node(
@@ -209,7 +209,7 @@ def create_reg_and_label_wf(name="reg_wf"):
     return workflow
 
 
-def create_dmn_pipeline_step1(name="dmn_step1", auto_reorient=True):
+def create_dmn_pipeline_step1(name="dmn_step1", scale_by_glycemia=True):
     inputnode = pe.Node(
         interface=util.IdentityInterface(fields=["subjects_dir",
                                                  "subject_id",
@@ -249,18 +249,10 @@ def create_dmn_pipeline_step1(name="dmn_step1", auto_reorient=True):
                                                  "dwi_to_t1_matrix",
 
                                                  # Outputs from the PET workflow after SUV calculation
-                                                 "SUV_pet_to_t1",
                                                  "SUV_corrected_pet_to_t1",
-                                                 "SUV_pet_results_npz",
-                                                 "SUV_pet_results_mat",
-
-                                                 # Outputs from the PET workflow using approx. arterial
-                                                 # input function (AIF)
-
-                                                 "AIF_pet_to_t1",
                                                  "AIF_corrected_pet_to_t1",
-                                                 "AIF_pet_results_npz",
-                                                 "AIF_pet_results_mat",
+                                                 "pet_results_npz",
+                                                 "pet_results_mat",
 
                                                  # T1 in DWI space for reference
                                                  "t1_to_dwi",
@@ -279,10 +271,15 @@ def create_dmn_pipeline_step1(name="dmn_step1", auto_reorient=True):
         output_names=["out_file"], function=calculate_SUV)
     compute_SUV_norm_glycemia = pe.Node(interface=compute_SUV_interface, name='compute_SUV_norm_glycemia')
 
+    scale_PVC_matrix_interface = util.Function(input_names=["subject_id", "in_file", "dose", "weight", "delay",
+        "scan_time", "isotope", 'height', "glycemie", "scale_SUV_by_glycemia"],
+        output_names=["out_npz", "out_matlab_mat"], function=scale_PVC_matrix_fn)
+    scale_PVC_matrix = pe.Node(interface=scale_PVC_matrix_interface, name='scale_PVC_matrix')
+    scale_PVC_matrix.inputs.scale_SUV_by_glycemia = scale_by_glycemia
+
     dtiproc = damaged_brain_dti_processing("dtiproc")
     reg_label = create_reg_and_label_wf("reg_label")
-    petquant_SUV = create_pet_quantification_wf("petquant_SUV", segment_t1=False)
-    petquant_AIF = create_pet_quantification_wf("petquant_AIF", segment_t1=False)
+    petquant = create_pet_quantification_wf("petquant", segment_t1=False)
 
     workflow = pe.Workflow(name=name)
     workflow.base_output_dir = name
@@ -307,17 +304,24 @@ def create_dmn_pipeline_step1(name="dmn_step1", auto_reorient=True):
     workflow.connect([(dtiproc, t1_to_dwi, [("outputnode.t1", "in_file")])])
     workflow.connect([(dtiproc, t1_to_dwi, [("outputnode.fa", "reference")])])
 
-    workflow.connect([(inputnode, compute_SUV_norm_glycemia, [("fdgpet", "in_file"),
-                                                   ("dose", "dose"),
+    workflow.connect([(inputnode, compute_SUV_norm_glycemia, [("dose", "dose"),
                                                    ("weight", "weight"),
                                                    ("delay", "delay"),
                                                    ("scan_time", "scan_time"),
                                                    ])])
-    # If this line is commented out, the SUV will not be divided by the glycemia
-    workflow.connect([(inputnode, compute_SUV_norm_glycemia, [("glycemie", "glycemie")])])
+    
+    if scale_by_glycemia == True:
+        workflow.connect([(inputnode, compute_SUV_norm_glycemia, [("glycemie", "glycemie")])])
 
     # This is for the arterial input function approximation for the FDG uptake
-    workflow.connect([(inputnode, compute_AIF_PET, [("fdgpet", "in_file"),
+    workflow.connect([(inputnode, compute_AIF_PET, [("dose", "dose"),
+                                                   ("weight", "weight"),
+                                                   ("delay", "delay"),
+                                                   ("glycemie", "glycemie"),
+                                                   ("scan_time", "scan_time"),
+                                                   ])])
+
+    workflow.connect([(inputnode, scale_PVC_matrix, [("subject_id", "subject_id"),
                                                    ("dose", "dose"),
                                                    ("weight", "weight"),
                                                    ("delay", "delay"),
@@ -325,24 +329,17 @@ def create_dmn_pipeline_step1(name="dmn_step1", auto_reorient=True):
                                                    ("scan_time", "scan_time"),
                                                    ])])
 
-    workflow.connect([(dtiproc, petquant_SUV, [("outputnode.t1", "inputnode.t1"),
+    workflow.connect([(dtiproc, petquant, [("outputnode.t1", "inputnode.t1"),
                                            ("outputnode.wm_prob", "inputnode.wm_prob"),
                                            ("outputnode.gm_prob", "inputnode.gm_prob"),
                                            ("outputnode.csf_prob", "inputnode.csf_prob"),
                                            ])])
 
-    workflow.connect([(dtiproc, petquant_AIF, [("outputnode.t1", "inputnode.t1"),
-                                           ("outputnode.wm_prob", "inputnode.wm_prob"),
-                                           ("outputnode.gm_prob", "inputnode.gm_prob"),
-                                           ("outputnode.csf_prob", "inputnode.csf_prob"),
-                                           ])])
-
-    workflow.connect([(compute_SUV_norm_glycemia, petquant_SUV, [("out_file", "inputnode.pet")])])
-    workflow.connect([(reg_label, petquant_SUV, [("outputnode.rois", "inputnode.rois")])])
-
-    workflow.connect([(compute_AIF_PET, petquant_AIF, [("out_file", "inputnode.pet")])])
-    workflow.connect([(reg_label, petquant_AIF, [("outputnode.rois", "inputnode.rois")])])
-
+    workflow.connect([(inputnode, petquant, [("fdgpet", "inputnode.pet")])])
+    workflow.connect([(reg_label, petquant, [("outputnode.rois", "inputnode.rois")])])
+    workflow.connect([(petquant, compute_AIF_PET, [("outputnode.corrected_pet_to_t1", "in_file")])])
+    workflow.connect([(petquant, compute_SUV_norm_glycemia, [("outputnode.corrected_pet_to_t1", "in_file")])])
+    workflow.connect([(petquant, scale_PVC_matrix, [("outputnode.pet_results_npz", "in_file")])])
 
     '''
     Connect outputnode
@@ -373,17 +370,10 @@ def create_dmn_pipeline_step1(name="dmn_step1", auto_reorient=True):
                                            ("outputnode.dwi_to_t1_matrix", "dwi_to_t1_matrix"),
                                            ])])
 
-    workflow.connect([(petquant_SUV, outputnode, [("outputnode.pet_to_t1", "SUV_pet_to_t1"),
-                                           ("outputnode.corrected_pet_to_t1", "SUV_corrected_pet_to_t1"),
-                                           ("outputnode.pet_results_npz", "SUV_pet_results_npz"),
-                                           ("outputnode.pet_results_mat", "SUV_pet_results_mat"),
-                                           ])])
-
-    workflow.connect([(petquant_AIF, outputnode, [("outputnode.pet_to_t1", "AIF_pet_to_t1"),
-                                           ("outputnode.corrected_pet_to_t1", "AIF_corrected_pet_to_t1"),
-                                           ("outputnode.pet_results_npz", "AIF_pet_results_npz"),
-                                           ("outputnode.pet_results_mat", "AIF_pet_results_mat"),
-                                           ])])
+    workflow.connect([(compute_AIF_PET, outputnode, [("out_file", "SUV_corrected_pet_to_t1")])])
+    workflow.connect([(compute_SUV_norm_glycemia, outputnode, [("out_file", "AIF_corrected_pet_to_t1")])])
+    workflow.connect([(scale_PVC_matrix, outputnode, [("out_npz", "pet_results_npz")])])
+    workflow.connect([(scale_PVC_matrix, outputnode, [("out_matlab_mat", "pet_results_mat")])])
     return workflow
 
 
