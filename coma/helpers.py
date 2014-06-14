@@ -249,6 +249,9 @@ def remove_unconnected_graphs_avg_and_cff(in_files, resolution_network_file, gro
 
     return out_files
 
+def add_subj_name_to_cortex_sfmask(subject_id):
+    return subject_id + "_SingleFiberMask_CortexOnly.nii.gz"
+
 
 def add_subj_name_to_sfmask(subject_id):
     return subject_id + "_SingleFiberMask.nii.gz"
