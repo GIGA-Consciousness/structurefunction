@@ -167,6 +167,7 @@ def inclusion_filtering(track_file, roi_file, fa_file, md_file, roi_names=None, 
             roi_i = str(int(roi_i))
         else:
             roi_i_file = [s for s in roi_files if "%s" % roi_names[idx_i] in s]
+            roi_i = roi_names[idx_i]
 
         filter_tracks_roi_i = pe.Node(interface=mrtrix.FilterTracks(), name='filt_%s' % roi_i)
         filter_tracks_roi_i.inputs.in_file = track_file
@@ -179,19 +180,14 @@ def inclusion_filtering(track_file, roi_file, fa_file, md_file, roi_names=None, 
 
             if idx_j > idx_i:
                 if roi_names is None:
-                    idpair = "%d_%d" % (int(roi_i), int(roi_j))
-                    idpair = idpair.replace(".","-")
-                    roi_i_file = [s for s in roi_files if "%d" % roi_i in s]
-                    roi_j_file = [s for s in roi_files if "%d" % roi_j in s]
-                    roi_i = str(int(roi_i))
                     roi_j = str(int(roi_j))
+                    idpair = "%s_%s" % (roi_i, roi_j)
+                    idpair = idpair.replace(".","-")
+                    roi_j_file = [s for s in roi_files if "%d" % roi_j in s]
                 else:
-                    idpair = "%s_%s" % (roi_names[idx_i], roi_names[idx_j])
-                    roi_i = roi_names[idx_i]
                     roi_j = roi_names[idx_j]
-                    roi_i_file = [s for s in roi_files if "%s" % roi_names[idx_i] in s]
                     roi_j_file = [s for s in roi_files if "%s" % roi_names[idx_j] in s]
-            
+                    idpair = "%s_%s" % (roi_i, roi_j)
 
                 filter_tracks_roi_i_roi_j = pe.Node(interface=mrtrix.FilterTracks(), name='filt_%s' % idpair)
                 filter_tracks_roi_i_roi_j.inputs.in_file = out_roi_i_filtered
@@ -415,6 +411,10 @@ def create_paired_tract_analysis_wf(name="track_filtering"):
         [(inputnode, paired_inclusion_filtering, [("fa", "fa_file")])])
     workflow.connect(
         [(inputnode, paired_inclusion_filtering, [("md", "md_file")])])
+    workflow.connect(
+        [(inputnode, paired_inclusion_filtering, [("registration_image_file", "registration_image_file")])])
+    workflow.connect(
+        [(inputnode, paired_inclusion_filtering, [("registration_matrix_file", "registration_matrix_file")])])
     workflow.connect(
         [(paired_inclusion_filtering, outputnode, [("out_files", "connectivity_files")])])
     workflow.connect(
