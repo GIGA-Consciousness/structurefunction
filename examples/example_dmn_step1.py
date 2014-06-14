@@ -94,6 +94,7 @@ workflow.connect([(dmnwf, datasink, [("outputnode.rois", "subject_id.@rois"),
                                        ("outputnode.wmmask_to_dwi", "subject_id.@wmmask_to_dwi"),
                                        ("outputnode.termmask_to_dwi", "subject_id.@termmask_to_dwi"),
                                        ("outputnode.dwi_to_t1_matrix", "subject_id.@dwi_to_t1_matrix"),
+                                       ("outputnode.single_fiber_mask_cortex_only", "subject_id.@single_fiber_mask_cortex_only"),
                                        ])])
 
 workflow.connect([(dmnwf, datasink, [("outputnode.SUV_corrected_pet_to_t1", "subject_id.@SUV_corrected_pet_to_t1"),
