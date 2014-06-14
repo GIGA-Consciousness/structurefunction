@@ -282,6 +282,22 @@ def add_subj_name_to_aparc(subject_id):
     return subject_id + "_aparc+aseg.nii.gz"
 
 
+def add_subj_name_to_FODs(subject_id):
+    return subject_id + "_FOD.nii.gz"
+
+
+def add_subj_name_to_tracks(subject_id):
+    return subject_id + "_fiber_tracks.tck"
+
+
+def add_subj_name_to_trk_tracks(subject_id):
+    return subject_id + "_tracks.trk"
+
+
+def add_subj_name_to_SFresponse(subject_id):
+    return subject_id + "_SF_response.txt"
+
+
 def select_CSF(in_files):
     out_file = None
     names = ["_seg_0", "_pve_0", "_prob_0"]
@@ -518,4 +534,36 @@ def translate_image(in_file, x=0, y=0, z=0, affine_from=None):
         
     img = nb.Nifti1Image(dataobj=in_img.get_data(), affine=out_affine, header=in_img.get_header())
     nb.save(img, out_file)
+    return out_file
+
+def combine_rois(rois_to_combine, prefix=None):
+    import os.path as op
+    import nibabel as nb
+    import numpy as np
+    from nipype.utils.filemanip import split_filename
+    print("Combining %s" ",".join(rois_to_combine))
+    image = nb.load(rois_to_combine[0])
+    new_data = np.zeros(np.shape(image.get_data()))
+    ids = []
+
+    for roi_file in rois_to_combine:
+        _, roi_name, _ = split_filename(roi_file)
+        roi_name = roi_name.replace("Region_ID_","")
+        roi_name = roi_name.replace(".","-")
+        ids.append(roi_name)
+        roi_image = nb.load(roi_file)
+        roi_data = roi_image.get_data()
+        new_data = new_data + roi_data
+
+    new_data[new_data > 0] = 1
+    new_data[new_data < 0] = 0
+
+    new_image = nb.Nifti1Image(dataobj=new_data, affine=image.get_affine(),
+        header=image.get_header())
+    if prefix is None:
+        out_file = op.abspath("MergedRegions_%s.nii.gz" % "_".join(ids))
+    else:
+        out_file = op.abspath("%s_MergedRegions_%s.nii.gz" % (prefix, "_".join(ids)))
+    nb.save(new_image, out_file)
+    print("Written to %s" % out_file)
     return out_file

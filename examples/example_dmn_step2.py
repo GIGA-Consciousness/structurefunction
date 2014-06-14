@@ -29,6 +29,25 @@ info = dict(dwi=[['subject_id', 'dwi']],
 
 subject_list = ['Bend1']
 
+
+roi_names = ["Left-Thalamus-Proper",
+         "Right-Thalamus-Proper",
+         "Left-mOFC-sFC-rAC",
+         "Right-mOFC-sFC-rAC",
+         "Left-PC-Precuneus-Isthmus",
+         "Right-PC-Precuneus-Isthmus",
+         "Left-Inferior-parietal",
+         "Right-Inferior-parietal"]
+
+short_roi_names = ["LThal",
+         "RThal",
+         "LFront",
+         "RFront",
+         "LPrec",
+         "RPrec",
+         "LInfPar",
+         "RInfPar"]
+
 infosource = pe.Node(interface=util.IdentityInterface(fields=['subject_id', 'subjects_dir']),
                      name="infosource")
 
@@ -49,6 +68,7 @@ datasource.inputs.sort_filelist = True
 
 datasink = pe.Node(interface=nio.DataSink(), name="datasink")
 datasink.inputs.base_directory = op.abspath(name)
+datasink.inputs.substitutions = [('_subject_id_', '')]
 
 dmnwf = create_dmn_pipeline_step2()
 
@@ -58,9 +78,11 @@ dmnwf.inputs.tracking.fsl2mrtrix.invert_y = False
 dmnwf.inputs.tracking.fsl2mrtrix.invert_z = False
 
 # Set a number of tracks
-dmnwf.inputs.tracking.CSDstreamtrack.desired_number_of_tracks = 10000
+dmnwf.inputs.tracking.CSDstreamtrack.desired_number_of_tracks = 300000
 dmnwf.inputs.tracking.CSDstreamtrack.minimum_tract_length = 10
 
+# Define ROI names
+dmnwf.inputs.connectivity.inputnode.roi_names = short_roi_names
 
 workflow = pe.Workflow(name=name)
 workflow.base_dir = name
@@ -83,11 +105,12 @@ workflow.connect([(datasource, dmnwf, [('fa', 'inputnode.fa')])])
 workflow.connect([(datasource, dmnwf, [('md', 'inputnode.md')])])
 workflow.connect([(datasource, dmnwf, [('roi_file', 'inputnode.roi_file')])])
 
-workflow.connect([(dmnwf, datasink, [("outputnode.fiber_odfs", "subject_id.@fiber_odfs"),
-                                   ("outputnode.fiber_tracks_tck_dwi", "subject_id.@fiber_tracks_tck_dwi"),
-                                   ("outputnode.fiber_tracks_trk_t1", "subject_id.@fiber_tracks_trk_t1"),
-                                   ("outputnode.connectivity_files", "subject_id.@connectivity_files"),
-                                   ("outputnode.connectivity_data", "subject_id.@connectivity_data"),
+workflow.connect([(dmnwf, datasink, [("outputnode.fiber_odfs", "Step2Results.@fiber_odfs"),
+                                   ("outputnode.fiber_tracks_tck_dwi", "Step2Results.@fiber_tracks_tck_dwi"),
+                                   ("outputnode.fiber_tracks_trk_t1", "Step2Results.@fiber_tracks_trk_t1"),
+                                   ("outputnode.connectivity_files", "Step2Results.@connectivity_files"),
+                                   ("outputnode.connectivity_data", "Step2Results.@connectivity_data"),
+                                   ("outputnode.summary_images", "Step2Results.@summary_images"),
                                    ])])
 
 workflow.config['execution'] = {'remove_unnecessary_outputs': 'false',

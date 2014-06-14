@@ -6,28 +6,32 @@ import nipype.interfaces.mrtrix as mrtrix
 
 fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
 
-def save_heatmap(in_array):
+def save_heatmap(in_array, labels, out_name):
     import matplotlib.pyplot as plt
     import numpy as np
-    column_labels = list('ABCD')
-    row_labels = list('WXYZ')
-    data = np.random.rand(4,4)
-    fig, ax = plt.subplots()
-    heatmap = ax.pcolor(data, cmap=plt.cm.Blues)
+    from nipype.utils.filemanip import split_filename
+    import seaborn as sns
 
-    # put the major ticks at the middle of each cell
-    ax.set_xticks(np.arange(data.shape[0])+0.5, minor=False)
-    ax.set_yticks(np.arange(data.shape[1])+0.5, minor=False)
+    fig, ax = plt.subplots()
+    heatmap = ax.pcolor(in_array, cmap=plt.cm.Blues)
 
     # want a more natural, table-like display
     ax.invert_yaxis()
     ax.xaxis.tick_top()
 
-    ax.set_xticklabels(row_labels, minor=False)
-    ax.set_yticklabels(column_labels, minor=False)
-    plt.show()
-    name = "test"
-    out_file = op.abspath("%s.png" % name)
+    ax.set_xticklabels(labels, minor=False)
+    ax.set_yticklabels(labels, minor=False)
+    cbar = plt.colorbar(heatmap)
+
+    # put the major ticks at the middle of each cell
+    ax.set_xticks(np.arange(in_array.shape[0])+0.5, minor=False)
+    ax.set_yticks(np.arange(in_array.shape[1])+0.5, minor=False)
+
+    #plt.xticks(rotation=45)
+
+    _, name, _ = split_filename(out_name)
+    out_file = op.abspath(name + ".pdf")
+    plt.savefig(out_file)
     return out_file
 
 
@@ -98,7 +102,7 @@ def get_rois(roi_file):
     rois.sort()
     return rois
 
-def split_roi(roi_file):
+def split_roi(roi_file, roi_names=None, prefix=None):
     import os.path as op
     import nibabel as nb
     import numpy as np
@@ -110,52 +114,33 @@ def split_roi(roi_file):
     rois.sort()
 
     roi_files = []
-    for roi in rois:
+    for idx, roi in enumerate(rois):
         new_data = roi_data.copy()
         new_data[roi_data==roi] = 1
         new_data[roi_data!=roi] = 0
         new_image = nb.Nifti1Image(dataobj=new_data, affine=roi_image.get_affine(),
             header=roi_image.get_header())
         new_image.set_data_dtype(np.uint8)
-        out_file = op.abspath("Region_ID_%s.nii.gz" % int(roi))
+
+        if roi_names is None:
+            roi_id = str(int(roi))
+        else:
+            roi_id = roi_names[idx]
+
+        if prefix is None:
+            out_file = op.abspath("Region_ID_%s.nii.gz" % roi_id)
+        else:
+            out_file = op.abspath("%s_Region_ID_%s.nii.gz" % (prefix, roi_id))
+
         nb.save(new_image, out_file)
         print("Written to %s" % out_file)
         roi_files.append(out_file)
     return roi_files
 
-def combine_rois(rois_to_combine):
-    import os.path as op
-    import nibabel as nb
-    import numpy as np
-    from nipype.utils.filemanip import split_filename
-    print("Combining %s" ",".join(rois_to_combine))
-    image = nb.load(rois_to_combine[0])
-    new_data = np.zeros(np.shape(image.get_data()))
-    ids = []
 
-    for roi_file in rois_to_combine:
-        _, roi_name, _ = split_filename(roi_file)
-        roi_name = roi_name.replace("Region_ID_","")
-        roi_name = roi_name.replace(".","-")
-        ids.append(roi_name)
-        roi_image = nb.load(roi_file)
-        roi_data = roi_image.get_data()
-        new_data = new_data + roi_data
-
-    new_data[new_data > 0] = 1
-    new_data[new_data < 0] = 0
-
-    new_image = nb.Nifti1Image(dataobj=new_data, affine=image.get_affine(),
-        header=image.get_header())
-    out_file = op.abspath("MergedRegions_%s.nii.gz" % "_".join(ids))
-    nb.save(new_image, out_file)
-    print("Written to %s" % out_file)
-    return out_file
-
-def inclusion_filtering(track_file, roi_file, fa_file, md_file, registration_image_file=None, transformation=None, prefix=None, tdi_threshold=10):
+def inclusion_filtering(track_file, roi_file, fa_file, md_file, roi_names=None, registration_image_file=None, registration_matrix_file=None, prefix=None, tdi_threshold=10):
     import os
     import os.path as op
-    import nibabel as nb
     import numpy as np
     import glob
     from coma.workflows.dmn import split_roi, get_rois, save_heatmap
@@ -167,7 +152,7 @@ def inclusion_filtering(track_file, roi_file, fa_file, md_file, registration_ima
     from nipype.utils.filemanip import split_filename
 
     rois = get_rois(roi_file)
-    roi_files = split_roi(roi_file)
+    roi_files = split_roi(roi_file, roi_names, prefix)
     out_files = []
 
     fa_matrix = np.zeros((len(rois), len(rois)))
@@ -177,57 +162,79 @@ def inclusion_filtering(track_file, roi_file, fa_file, md_file, registration_ima
 
     track_files = []
     for idx_i, roi_i in enumerate(rois):
-        for idx_j, roi_j in enumerate(rois):
-            if roi_j > roi_i:
-                idpair = "%d_%d" % (int(roi_i), int(roi_j))
-                idpair = idpair.replace(".","-")
-                roi_i_file = [s for s in roi_files if "%d" % roi_i in s]
-                roi_j_file = [s for s in roi_files if "%d" % roi_j in s]
-                
-                filter_tracks_roi_i = pe.Node(interface=mrtrix.FilterTracks(), name='filt_%d' % int(roi_i))
-                filter_tracks_roi_i.inputs.in_file = track_file
-                filter_tracks_roi_i.inputs.include_file = roi_i_file[0]
-                filter_tracks_roi_i.inputs.out_filename = "FiltTracks_%d.tck" % roi_i
+        if roi_names is None:
+            roi_i_file = [s for s in roi_files if "%d" % roi_i in s]
+            roi_i = str(int(roi_i))
+        else:
+            roi_i_file = [s for s in roi_files if "%s" % roi_names[idx_i] in s]
 
-                filter_tracks_roi_i_roi_j = filter_tracks_roi_i.clone(name='filt_%s' % idpair)
+        filter_tracks_roi_i = pe.Node(interface=mrtrix.FilterTracks(), name='filt_%s' % roi_i)
+        filter_tracks_roi_i.inputs.in_file = track_file
+        filter_tracks_roi_i.inputs.include_file = roi_i_file[0]
+        out_roi_i_filtered = op.abspath("%s_FiltTracks_%s.tck" % (prefix, roi_i))
+        filter_tracks_roi_i.inputs.out_filename = out_roi_i_filtered
+        filter_tracks_roi_i.run()
+
+        for idx_j, roi_j in enumerate(rois):
+
+            if idx_j > idx_i:
+                if roi_names is None:
+                    idpair = "%d_%d" % (int(roi_i), int(roi_j))
+                    idpair = idpair.replace(".","-")
+                    roi_i_file = [s for s in roi_files if "%d" % roi_i in s]
+                    roi_j_file = [s for s in roi_files if "%d" % roi_j in s]
+                    roi_i = str(int(roi_i))
+                    roi_j = str(int(roi_j))
+                else:
+                    idpair = "%s_%s" % (roi_names[idx_i], roi_names[idx_j])
+                    roi_i = roi_names[idx_i]
+                    roi_j = roi_names[idx_j]
+                    roi_i_file = [s for s in roi_files if "%s" % roi_names[idx_i] in s]
+                    roi_j_file = [s for s in roi_files if "%s" % roi_names[idx_j] in s]
+            
+
+                filter_tracks_roi_i_roi_j = pe.Node(interface=mrtrix.FilterTracks(), name='filt_%s' % idpair)
+                filter_tracks_roi_i_roi_j.inputs.in_file = out_roi_i_filtered
                 filter_tracks_roi_i_roi_j.inputs.include_file = roi_j_file[0]
-                filter_tracks_roi_i_roi_j.inputs.out_filename = "FiltTracks_%s.tck" % idpair
+                filter_tracks_roi_i_roi_j.inputs.out_filename = "%s_FiltTracks_%s.tck" % (prefix, idpair)
 
                 tracks2tdi = pe.Node(interface=mrtrix.Tracks2Prob(), name='tdi_%s' % idpair)
                 tracks2tdi.inputs.template_file = fa_file
-                tracks2tdi.inputs.out_filename = "TDI_%s.nii.gz" % idpair
+                out_tdi_name = op.abspath("%s_TDI_%s.nii.gz" % (prefix, idpair))
+                tracks2tdi.inputs.out_filename = out_tdi_name
                 tracks2tdi.inputs.output_datatype = "Int16"
 
                 binarize_tdi = pe.Node(interface=fsl.ImageMaths(), name='binarize_tdi_%s' % idpair)
                 binarize_tdi.inputs.op_string = "-thr %d -bin" % tdi_threshold
-                binarize_tdi.inputs.out_file = op.abspath("TDI_bin_%d_%s.nii.gz" % (tdi_threshold, idpair))
+                out_tdi_vol_name = op.abspath("%s_TDI_bin_%d_%s.nii.gz" % (prefix, tdi_threshold, idpair))
+                binarize_tdi.inputs.out_file = out_tdi_vol_name
 
                 mask_fa = pe.Node(interface=fsl.MultiImageMaths(), name='mask_fa_%s' % idpair)
                 mask_fa.inputs.op_string = "-mul %s"
                 mask_fa.inputs.operand_files = [fa_file]
-                mask_fa.inputs.out_file = op.abspath("FA_%s.nii.gz" % idpair)
+                out_fa_name = op.abspath("%s_FA_%s.nii.gz" % (prefix, idpair))
+                mask_fa.inputs.out_file = out_fa_name
 
                 mask_md = mask_fa.clone(name='mask_md_%s' % idpair)
                 mask_md.inputs.operand_files = [md_file]
-                mask_md.inputs.out_file = op.abspath("MD_%s.nii.gz" % idpair)
+                out_md_name = op.abspath("%s_MD_%s.nii.gz" % (prefix, idpair))
+                mask_md.inputs.out_file = out_md_name
 
                 mean_fa = pe.Node(interface=fsl.ImageStats(op_string = '-M'), name = 'mean_fa_%s' % idpair) 
                 mean_md = pe.Node(interface=fsl.ImageStats(op_string = '-M'), name = 'mean_md_%s' % idpair) 
                 mean_tdi = pe.Node(interface=fsl.ImageStats(op_string = '-l %d -M' % tdi_threshold), name = 'mean_tdi_%s' % idpair)
-                track_volume = pe.Node(interface=fsl.ImageStats(op_string = '-l %d -V' % tdi_threshold ), name = 'track_volume_%s' % idpair)
+                track_volume = pe.Node(interface=fsl.ImageStats(op_string = '-l %d -V' % tdi_threshold), name = 'track_volume_%s' % idpair)
 
                 tck2trk = pe.Node(interface=mrtrix.MRTrix2TrackVis(), name='tck2trk')
                 tck2trk.inputs.image_file = fa_file
 
-                if registration_image_file is not None and transformation is not None:
+                if registration_image_file is not None and registration_matrix_file is not None:
                     tck2trk.inputs.registration_image_file = registration_image_file
-                    tck2trk.inputs.matrix_file = transformation
+                    tck2trk.inputs.matrix_file = registration_matrix_file
 
                 workflow = pe.Workflow(name=idpair)
                 workflow.base_dir = op.abspath(idpair)
 
-                workflow.connect(
-                    [(filter_tracks_roi_i, filter_tracks_roi_i_roi_j, [("out_file", "in_file")])])
                 workflow.connect(
                     [(filter_tracks_roi_i_roi_j, tracks2tdi, [("out_file", "in_file")])])
                 workflow.connect(
@@ -251,10 +258,10 @@ def inclusion_filtering(track_file, roi_file, fa_file, md_file, registration_ima
                                                    'hash_method': 'timestamp'}
 
                 result = workflow.run()
-                fa_masked = glob.glob(op.abspath("FA_%s.nii.gz" % idpair))[0]
-                md_masked = glob.glob(op.abspath("MD_%s.nii.gz" % idpair))[0]
-                tracks    = glob.glob(op.abspath(op.join(idpair,idpair,'filt_%s' % idpair, "FiltTracks_%s.tck" % idpair)))[0]
-                tdi = op.abspath("TDI_bin_%d_%s.nii.gz" % (tdi_threshold, idpair))
+                fa_masked = glob.glob(out_fa_name)[0]
+                md_masked = glob.glob(out_md_name)[0]
+                tracks    = glob.glob(op.abspath(op.join(idpair,idpair,'filt_%s' % idpair, "%s_FiltTracks_%s.tck" % (prefix, idpair))))[0]
+                tdi = glob.glob(out_tdi_vol_name)[0]
 
                 nodes = result.nodes()
                 node_names = [s.name for s in nodes]
@@ -306,7 +313,21 @@ def inclusion_filtering(track_file, roi_file, fa_file, md_file, registration_ima
         npz_data = op.abspath("%s_connectivity.npz" % prefix)
     np.savez(npz_data, fa=fa_matrix, md=md_matrix, tdi=tdi_matrix, trkvol=track_volume_matrix)
 
-    out_merged_file = op.abspath('MergedTracks.trk')
+
+    print("Saving heatmaps...")
+    fa_heatmap = save_heatmap(fa_matrix, roi_names, '%s_fa' % prefix)
+    md_heatmap = save_heatmap(md_matrix, roi_names, '%s_md' % prefix)
+    tdi_heatmap = save_heatmap(tdi_matrix, roi_names, '%s_tdi' % prefix)
+    trk_vol_heatmap = save_heatmap(track_volume_matrix, roi_names, '%s_trk_vol' % prefix)
+    
+    summary_images = []
+    summary_images.append(fa_heatmap)
+    summary_images.append(md_heatmap)
+    summary_images.append(tdi_heatmap)
+    summary_images.append(trk_vol_heatmap)
+
+
+    out_merged_file = op.abspath('%s_MergedTracks.trk' % prefix)
     skip = 80.
     track_merge = pe.Node(interface=dtk.TrackMerge(), name='track_merge')
     track_merge.inputs.track_files = track_files
@@ -318,14 +339,13 @@ def inclusion_filtering(track_file, roi_file, fa_file, md_file, registration_ima
         _, name, _ = split_filename(t)
         track_names.append(name)
 
-    out_scene_file = write_trackvis_scene(out_merged_file, n_clusters=len(track_files), skip=skip, names=track_names, out_file = "NewScene.scene")
+    out_scene = op.abspath("%s_MergedScene.scene" % prefix)
+    out_scene_file = write_trackvis_scene(out_merged_file, n_clusters=len(track_files), skip=skip, names=track_names, out_file=out_scene)
     print("Merged track file written to %s" % out_merged_file)
     print("Scene file written to %s" % out_scene_file)
     out_files.append(out_merged_file)
     out_files.append(out_scene_file)
-    #summary_images = []
-    #summary_images.append(save_heatmap(fa_matrix))
-    return out_files, npz_data
+    return out_files, npz_data, summary_images
 
 
 def create_paired_tract_analysis_wf(name="track_filtering"):
@@ -343,10 +363,14 @@ def create_paired_tract_analysis_wf(name="track_filtering"):
     Define the nodes
     '''
     inputnode = pe.Node(
-        interface=util.IdentityInterface(fields=["track_file",
+        interface=util.IdentityInterface(fields=["subject_id",
+                                                 "track_file",
                                                  "fa",
                                                  "md",
-                                                 "roi_file"]),
+                                                 "roi_file",
+                                                 "roi_names",
+                                                 "registration_image_file",
+                                                 "registration_matrix_file"]),
         name="inputnode")
 
 
@@ -357,11 +381,12 @@ def create_paired_tract_analysis_wf(name="track_filtering"):
 
     filter_tracks = pe.Node(interface=mrtrix.FilterTracks(), name='filter_tracks')
 
-    incl_filt_interface = util.Function(input_names=["track_file", "roi_file", "fa_file", "md_file", "prefix", "tdi_threshold"],
-        output_names=["out_files", "npz_data"], function=inclusion_filtering)
+    incl_filt_interface = util.Function(input_names=["track_file", "roi_file", "fa_file", "md_file",
+        "roi_names", "registration_image_file", "registration_matrix_file", "prefix", "tdi_threshold"],
+        output_names=["out_files", "npz_data", "summary_images"], function=inclusion_filtering)
     paired_inclusion_filtering = pe.Node(interface=incl_filt_interface, name='paired_inclusion_filtering')
 
-    output_fields = ["connectivity_files", "connectivity_data"]
+    output_fields = ["connectivity_files", "connectivity_data", "summary_images"]
     outputnode = pe.Node(
         interface=util.IdentityInterface(fields=output_fields),
         name="outputnode")
@@ -381,6 +406,10 @@ def create_paired_tract_analysis_wf(name="track_filtering"):
     workflow.connect(
         [(filter_tracks, paired_inclusion_filtering, [("out_file", "track_file")])])
     workflow.connect(
+        [(inputnode, paired_inclusion_filtering, [("roi_names", "roi_names")])])
+    workflow.connect(
+        [(inputnode, paired_inclusion_filtering, [("subject_id", "prefix")])])
+    workflow.connect(
         [(inputnode, paired_inclusion_filtering, [("roi_file", "roi_file")])])
     workflow.connect(
         [(inputnode, paired_inclusion_filtering, [("fa", "fa_file")])])
@@ -390,5 +419,7 @@ def create_paired_tract_analysis_wf(name="track_filtering"):
         [(paired_inclusion_filtering, outputnode, [("out_files", "connectivity_files")])])
     workflow.connect(
         [(paired_inclusion_filtering, outputnode, [("npz_data", "connectivity_data")])])
+    workflow.connect(
+        [(paired_inclusion_filtering, outputnode, [("summary_images", "summary_images")])])
     return workflow
 

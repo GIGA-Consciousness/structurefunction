@@ -1,4 +1,3 @@
-import nipype.interfaces.io as nio           # Data i/o
 import nipype.interfaces.utility as util     # utility
 import nipype.pipeline.engine as pe          # pypeline engine
 import nipype.interfaces.fsl as fsl
@@ -6,11 +5,8 @@ import nipype.interfaces.mrtrix as mrtrix
 
 fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
 
-from coma.helpers import (add_subj_name_to_sfmask, add_subj_name_to_wmmask,
-                          add_subj_name_to_T1, add_subj_name_to_T1brain,
-                          add_subj_name_to_termmask, add_subj_name_to_aparc,
-                          select_ribbon, select_GM, select_WM, select_CSF,
-                          wm_labels_only)
+from coma.helpers import (add_subj_name_to_FODs, add_subj_name_to_tracks,
+                          add_subj_name_to_SFresponse, add_subj_name_to_trk_tracks)
 
 
 def anatomically_constrained_tracking(name="fiber_tracking", lmax=4):
@@ -41,7 +37,6 @@ def anatomically_constrained_tracking(name="fiber_tracking", lmax=4):
     '''
 
     fsl2mrtrix = pe.Node(interface=mrtrix.FSL2MRTrix(), name='fsl2mrtrix')
-    #fsl2mrtrix.inputs.invert_y = True
 
     estimateresponse = pe.Node(interface=mrtrix.EstimateResponseForSH(),
                                name='estimateresponse')
@@ -90,6 +85,15 @@ def anatomically_constrained_tracking(name="fiber_tracking", lmax=4):
     workflow.connect([(inputnode, csdeconv, [("dwi", "in_file")])])
 
     #workflow.connect([(inputnode, csdeconv, [("termination_mask", "mask_image")])])
+
+    workflow.connect(
+        [(inputnode, estimateresponse, [(('subject_id', add_subj_name_to_SFresponse), 'out_filename')])])
+    workflow.connect(
+        [(inputnode, csdeconv, [(('subject_id', add_subj_name_to_FODs), 'out_filename')])])
+    workflow.connect(
+        [(inputnode, CSDstreamtrack, [(('subject_id', add_subj_name_to_tracks), 'out_file')])])
+    workflow.connect(
+        [(inputnode, tck2trk, [(('subject_id', add_subj_name_to_trk_tracks), 'out_filename')])])
 
     workflow.connect(
         [(estimateresponse, csdeconv, [("response", "response_file")])])

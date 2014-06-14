@@ -395,7 +395,8 @@ def create_dmn_pipeline_step2(name="dmn_step2", auto_reorient=True):
                                                  # For the connectivity workflow
                                                  "fa",
                                                  "md",
-                                                 "roi_file"]),
+                                                 "roi_file",
+                                                 "summary_images"]),
         name="inputnode")
 
     outputnode = pe.Node(
@@ -403,7 +404,8 @@ def create_dmn_pipeline_step2(name="dmn_step2", auto_reorient=True):
                                                  "fiber_tracks_tck_dwi",
                                                  "fiber_tracks_trk_t1",
                                                  "connectivity_files",
-                                                 "connectivity_data"]),
+                                                 "connectivity_data",
+                                                 "summary_images"]),
         name="outputnode")
 
     tracking = anatomically_constrained_tracking("tracking")
@@ -429,12 +431,14 @@ def create_dmn_pipeline_step2(name="dmn_step2", auto_reorient=True):
     workflow.connect([(tracking, connectivity, [("outputnode.fiber_tracks_tck_dwi", "inputnode.track_file")])])
 
     workflow.connect(
-        [(inputnode, connectivity, [("fa", "inputnode.fa"),
+        [(inputnode, connectivity, [("subject_id", "inputnode.subject_id"),
+                                    ("fa", "inputnode.fa"),
                                     ("md", "inputnode.md"),
-                                    ("roi_file", "inputnode.roi_file")])
+                                    ("roi_file", "inputnode.roi_file"),
+                                    ("registration_matrix_file", "inputnode.registration_matrix_file"),
+                                    ("registration_image_file", "inputnode.registration_image_file"),
+                                    ])
          ])
-
-
 
     workflow.connect([(tracking, outputnode, [("outputnode.fiber_odfs", "fiber_odfs"),
                                            ("outputnode.fiber_tracks_tck_dwi", "fiber_tracks_tck_dwi"),
@@ -443,6 +447,7 @@ def create_dmn_pipeline_step2(name="dmn_step2", auto_reorient=True):
 
     workflow.connect([(connectivity, outputnode, [("outputnode.connectivity_files", "connectivity_files"),
                                            ("outputnode.connectivity_data", "connectivity_data"),
+                                           ("outputnode.summary_images", "summary_images"),
                                            ])])
 
     return workflow
