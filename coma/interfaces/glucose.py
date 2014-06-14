@@ -97,6 +97,8 @@ def scale_PVC_matrix_fn(subject_id, in_file, dose, weight, delay, scan_time=15, 
     
     for method in methods:
         data = pvc[method]
+        new_dict["orig_" + method] = data
+        
         AIF = data * slope + inter
         new_dict["AIF_"+ method] = AIF
 

@@ -46,6 +46,9 @@ grab_subject_data.inputs.data_file = op.join(data_path, "SubjectData.csv")
 
 datasink = pe.Node(interface=nio.DataSink(), name="datasink")
 datasink.inputs.base_directory = op.abspath(name)
+#datasink.inputs.parameterization = False
+datasink.inputs.substitutions = [('_subject_id_', '')]
+
 
 dmnwf = create_dmn_pipeline_step1()
 
