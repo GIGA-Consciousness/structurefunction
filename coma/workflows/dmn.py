@@ -3,6 +3,7 @@ import nipype.interfaces.utility as util     # utility
 import nipype.pipeline.engine as pe          # pypeline engine
 import nipype.interfaces.fsl as fsl
 import nipype.interfaces.mrtrix as mrtrix
+from coma.interfaces.mrtrix3 import inclusion_filtering_mrtrix3
 
 fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
 
@@ -102,7 +103,7 @@ def get_rois(roi_file):
     rois.sort()
     return rois
 
-def split_roi(roi_file, roi_names=None, prefix=None):
+def split_roi(roi_file, roi_names=None, prefix=None, binarize=True):
     import os.path as op
     import nibabel as nb
     import numpy as np
@@ -116,7 +117,8 @@ def split_roi(roi_file, roi_names=None, prefix=None):
     roi_files = []
     for idx, roi in enumerate(rois):
         new_data = roi_data.copy()
-        new_data[roi_data==roi] = 1
+        if binarize == True:
+            new_data[roi_data==roi] = 1
         new_data[roi_data!=roi] = 0
         new_image = nb.Nifti1Image(dataobj=new_data, affine=roi_image.get_affine(),
             header=roi_image.get_header())
@@ -177,13 +179,12 @@ def inclusion_filtering(track_file, roi_file, fa_file, md_file, roi_names=None, 
         filter_tracks_roi_i.run()
 
         for idx_j, roi_j in enumerate(rois):
-
             if idx_j > idx_i:
                 if roi_names is None:
                     roi_j = str(int(roi_j))
                     idpair = "%s_%s" % (roi_i, roi_j)
                     idpair = idpair.replace(".","-")
-                    roi_j_file = [s for s in roi_files if "%d" % roi_j in s]
+                    roi_j_file = [s for s in roi_files if "%s" % roi_j in s]
                 else:
                     roi_j = roi_names[idx_j]
                     roi_j_file = [s for s in roi_files if "%s" % roi_names[idx_j] in s]
@@ -217,12 +218,14 @@ def inclusion_filtering(track_file, roi_file, fa_file, md_file, roi_names=None, 
                 mask_md.inputs.out_file = out_md_name
 
                 mean_fa = pe.Node(interface=fsl.ImageStats(op_string = '-M'), name = 'mean_fa_%s' % idpair) 
-                mean_md = pe.Node(interface=fsl.ImageStats(op_string = '-M'), name = 'mean_md_%s' % idpair) 
+                mean_md = pe.Node(interface=fsl.ImageStats(op_string = '-M'), name = 'mean_md_%s' % idpair)
                 mean_tdi = pe.Node(interface=fsl.ImageStats(op_string = '-l %d -M' % tdi_threshold), name = 'mean_tdi_%s' % idpair)
                 track_volume = pe.Node(interface=fsl.ImageStats(op_string = '-l %d -V' % tdi_threshold), name = 'track_volume_%s' % idpair)
 
                 tck2trk = pe.Node(interface=mrtrix.MRTrix2TrackVis(), name='tck2trk')
                 tck2trk.inputs.image_file = fa_file
+                tck2trk.inputs.out_filename = idpair + ".trk"
+
 
                 if registration_image_file is not None and registration_matrix_file is not None:
                     tck2trk.inputs.registration_image_file = registration_image_file
@@ -379,7 +382,7 @@ def create_paired_tract_analysis_wf(name="track_filtering"):
 
     incl_filt_interface = util.Function(input_names=["track_file", "roi_file", "fa_file", "md_file",
         "roi_names", "registration_image_file", "registration_matrix_file", "prefix", "tdi_threshold"],
-        output_names=["out_files", "npz_data", "summary_images"], function=inclusion_filtering)
+        output_names=["out_files", "npz_data", "summary_images"], function=inclusion_filtering_mrtrix3)
     paired_inclusion_filtering = pe.Node(interface=incl_filt_interface, name='paired_inclusion_filtering')
 
     output_fields = ["connectivity_files", "connectivity_data", "summary_images"]
