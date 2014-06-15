@@ -539,7 +539,7 @@ def translate_image(in_file, x=0, y=0, z=0, affine_from=None):
     nb.save(img, out_file)
     return out_file
 
-def combine_rois(rois_to_combine, prefix=None):
+def combine_rois(rois_to_combine, prefix=None, binarize=True):
     import os.path as op
     import nibabel as nb
     import numpy as np
@@ -556,10 +556,12 @@ def combine_rois(rois_to_combine, prefix=None):
         ids.append(roi_name)
         roi_image = nb.load(roi_file)
         roi_data = roi_image.get_data()
+        # This will be messed up if the ROIs overlap!
         new_data = new_data + roi_data
 
-    new_data[new_data > 0] = 1
-    new_data[new_data < 0] = 0
+    if binarize == True:
+        new_data[new_data > 0] = 1
+        new_data[new_data < 0] = 0
 
     new_image = nb.Nifti1Image(dataobj=new_data, affine=image.get_affine(),
         header=image.get_header())
