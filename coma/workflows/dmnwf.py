@@ -106,6 +106,10 @@ def create_reg_and_label_wf(name="reg_wf"):
         name = 'rois_to_dwi')
     rois_to_dwi.inputs.interp = "nearestneighbour"
 
+    threshold_fa = pe.Node(interface=fsl.ImageMaths(),
+        name = 'threshold_fa')
+    threshold_fa.inputs.op_string = "-thr 0.2 -bin"
+
     termmask_to_dwi = rois_to_dwi.clone("termmask_to_dwi")
 
     invertxfm = pe.Node(interface=fsl.ConvertXFM(),
@@ -146,7 +150,8 @@ def create_reg_and_label_wf(name="reg_wf"):
     workflow.connect([(inputnode, dmn_labelling, [("aparc_aseg", "in_file")])])
 
     workflow.connect([(inputnode, align_wmmask_to_dwi,[("wm_mask","inputnode.moving_image")])])
-    workflow.connect([(inputnode, align_wmmask_to_dwi,[("fa","inputnode.fixed_image")])])
+    workflow.connect([(inputnode, threshold_fa,[("fa","in_file")])])
+    workflow.connect([(threshold_fa, align_wmmask_to_dwi,[("out_file","inputnode.fixed_image")])])
     
     workflow.connect([(dmn_labelling, rois_to_dwi,[("out_file","in_file")])])
     workflow.connect([(dmn_labelling, rois_to_dwi,[("out_file","reference")])])
