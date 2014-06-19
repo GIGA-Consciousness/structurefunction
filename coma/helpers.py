@@ -301,6 +301,14 @@ def add_subj_name_to_SFresponse(subject_id):
     return subject_id + "_SF_response.txt"
 
 
+def add_subj_name_to_T1_dwi(subject_id):
+    return subject_id + "_T1_dwi.nii.gz"
+
+
+def add_subj_name_to_PET_T1(subject_id):
+    return subject_id + "_PET_T1.nii.gz"
+
+
 def select_CSF(in_files):
     out_file = None
     names = ["_seg_0", "_pve_0", "_prob_0"]

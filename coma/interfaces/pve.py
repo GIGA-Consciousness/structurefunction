@@ -171,11 +171,12 @@ def fix_roi_values_noLUT(roi_image, gm_file, white_matter_file, csf_file, prob_t
     hdr = image.get_header()
 
     unlabelled = np.where((gm_data > prob_thresh) & (data_uint8 == 0))[0]
+
     # Create extra ROI if there are extra GM regions in the GM mask
     if len(unlabelled) > 0:
         highestlabel = np.max(data_uint8)
         assert(highestlabel != 255)
-        data_uint8[np.where((gm_data > prob_thresh) & (data_uint8 == 0))] = highestlabel + 1
+        data_uint8[np.where((gm_data > 0) & (data_uint8 == 0))] = highestlabel + 1
 
     fixed = nb.Nifti1Image(
         dataobj=data_uint8, affine=image.get_affine(), header=hdr)
@@ -186,7 +187,7 @@ def fix_roi_values_noLUT(roi_image, gm_file, white_matter_file, csf_file, prob_t
     return fixed_roi_image, wm_label_file, csf_label_file, remap_dict
 
 
-def fix_roi_values(roi_image, gm_file, white_matter_file, csf_file, use_fs_LUT=True, prob_thresh=0.7):
+def fix_roi_values(roi_image, gm_binary_mask, white_matter_file, csf_file, use_fs_LUT=True, prob_thresh=0.7):
     '''
     Changes ROI values to prevent values equal to 1, 2,
     or 3. These are reserved for GM/WM/CSF in the PVELab
@@ -196,7 +197,7 @@ def fix_roi_values(roi_image, gm_file, white_matter_file, csf_file, use_fs_LUT=T
     if use_fs_LUT:
         fixed_roi_image, wm_label_file, csf_label_file, remap_dict = fix_roi_values_freesurferLUT(roi_image, white_matter_file, csf_file, prob_thresh)
     else:
-        fixed_roi_image, wm_label_file, csf_label_file, remap_dict = fix_roi_values_noLUT(roi_image, gm_file, white_matter_file, csf_file, prob_thresh)
+        fixed_roi_image, wm_label_file, csf_label_file, remap_dict = fix_roi_values_noLUT(roi_image, gm_binary_mask, white_matter_file, csf_file, prob_thresh)
 
     return fixed_roi_image, wm_label_file, csf_label_file, remap_dict
 
@@ -244,11 +245,13 @@ class PartialVolumeCorrectionInputSpec(BaseInterfaceInputSpec):
     t1_file = File(exists=True, mandatory=True,
                    desc='The input T1')
     white_matter_file = File(exists=True,
-                             desc='Segmented white matter')
+                             desc='White matter probability map')
     grey_matter_file = File(exists=True,
-                            desc='Segmented grey matter')
+                            desc='Grey matter probability map')
+    grey_matter_binary_mask = File(exists=True,
+                            desc='Hard-segmented binary grey matter mask')
     csf_file = File(exists=True,
-                    desc='Segmented cerebrospinal fluid')
+                    desc='Cerebrospinal fluid probability map')
     roi_file = File(exists=True, mandatory=True, xor=['skip_atlas'],
                     desc='The input ROI image')
     skip_atlas = traits.Bool(xor=['roi_file'],
@@ -329,8 +332,12 @@ class PartialVolumeCorrection(BaseInterface):
         iflogger.info("Writing to %s" % gm_path)
 
         fixed_roi_file, fixed_wm, fixed_csf, remap_dict = fix_roi_values(
-            self.inputs.roi_file, self.inputs.grey_matter_file, 
-            self.inputs.white_matter_file, self.inputs.csf_file, self.inputs.use_fs_LUT)
+            self.inputs.roi_file, self.inputs.grey_matter_binary_mask, 
+            self.inputs.white_matter_file,
+            self.inputs.csf_file, self.inputs.use_fs_LUT)
+
+
+        
 
         rois_path, _ = nifti_to_analyze(fixed_roi_file)
         iflogger.info("Writing to %s" % rois_path)

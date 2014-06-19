@@ -1,6 +1,6 @@
 import os
 import os.path as op
-from surfer import Brain, project_volume_data
+from surfer import Brain, io
 
 from coma.datasets import sample
 data_path = sample.data_path()

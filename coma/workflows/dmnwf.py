@@ -10,7 +10,8 @@ from coma.workflows.dti.tracking import anatomically_constrained_tracking
 from coma.workflows.dmn import create_paired_tract_analysis_wf
 from coma.workflows.pet import create_pet_quantification_wf
 from coma.labels import dmn_labels_combined
-from coma.helpers import add_subj_name_to_rois, rewrite_mat_for_applyxfm, add_subj_name_to_cortex_sfmask
+from coma.helpers import (add_subj_name_to_rois, rewrite_mat_for_applyxfm,
+    add_subj_name_to_cortex_sfmask, add_subj_name_to_T1_dwi, select_GM)
 from coma.interfaces.glucose import CMR_glucose, calculate_SUV, scale_PVC_matrix_fn
 
 def coreg_without_resample(name="highres_coreg"):
@@ -253,6 +254,7 @@ def create_dmn_pipeline_step1(name="dmn_step1", scale_by_glycemia=True):
                                                  "AIF_corrected_pet_to_t1",
                                                  "pet_results_npz",
                                                  "pet_results_mat",
+                                                 "orig_pet_to_t1",
 
                                                  # T1 in DWI space for reference
                                                  "t1_to_dwi",
@@ -310,6 +312,7 @@ def create_dmn_pipeline_step1(name="dmn_step1", scale_by_glycemia=True):
     workflow.connect([(reg_label, t1_to_dwi, [("outputnode.t1_to_dwi_matrix", "in_matrix_file")])])
     workflow.connect([(dtiproc, t1_to_dwi, [("outputnode.t1", "in_file")])])
     workflow.connect([(dtiproc, t1_to_dwi, [("outputnode.fa", "reference")])])
+    workflow.connect([(inputnode, t1_to_dwi, [(('subject_id', add_subj_name_to_T1_dwi), 'out_file')])])    
 
     workflow.connect([(reg_label, termmask_to_dwi, [("outputnode.t1_to_dwi_matrix", "in_matrix_file")])])
     workflow.connect([(dtiproc, termmask_to_dwi, [("outputnode.term_mask", "in_file")])])
@@ -346,6 +349,11 @@ def create_dmn_pipeline_step1(name="dmn_step1", scale_by_glycemia=True):
                                                    ("scan_time", "scan_time"),
                                                    ])])
 
+
+    workflow.connect(
+        [(dtiproc, petquant, [(('outputnode.tissue_class_files', select_GM), 'inputnode.gm_mask')])])
+
+
     workflow.connect([(dtiproc, petquant, [("outputnode.t1", "inputnode.t1"),
                                            ("outputnode.wm_prob", "inputnode.wm_prob"),
                                            ("outputnode.gm_prob", "inputnode.gm_prob"),
@@ -353,6 +361,7 @@ def create_dmn_pipeline_step1(name="dmn_step1", scale_by_glycemia=True):
                                            ])])
 
     workflow.connect([(inputnode, petquant, [("fdgpet", "inputnode.pet")])])
+    workflow.connect([(inputnode, petquant, [("subject_id", "inputnode.subject_id")])])
     workflow.connect([(reg_label, petquant, [("outputnode.rois", "inputnode.rois")])])
     workflow.connect([(petquant, compute_AIF_PET, [("outputnode.corrected_pet_to_t1", "in_file")])])
     workflow.connect([(petquant, compute_SUV_norm_glycemia, [("outputnode.corrected_pet_to_t1", "in_file")])])
@@ -389,6 +398,7 @@ def create_dmn_pipeline_step1(name="dmn_step1", scale_by_glycemia=True):
 
     workflow.connect([(compute_AIF_PET, outputnode, [("out_file", "SUV_corrected_pet_to_t1")])])
     workflow.connect([(compute_SUV_norm_glycemia, outputnode, [("out_file", "AIF_corrected_pet_to_t1")])])
+    workflow.connect([(petquant, outputnode, [("outputnode.orig_pet_to_t1", "orig_pet_to_t1")])])
     workflow.connect([(scale_PVC_matrix, outputnode, [("out_npz", "pet_results_npz")])])
     workflow.connect([(scale_PVC_matrix, outputnode, [("out_matlab_mat", "pet_results_mat")])])
     workflow.connect([(single_fiber_mask_cortex_only, outputnode, [("out_file", "single_fiber_mask_cortex_only")])])
