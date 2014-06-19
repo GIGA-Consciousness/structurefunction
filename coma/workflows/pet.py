@@ -6,7 +6,7 @@ from ..helpers import select_CSF, select_WM, select_GM
 fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
 
 from coma.interfaces.pve import PartialVolumeCorrection
-
+from coma.helpers import add_subj_name_to_PET_T1
 
 def create_pet_quantification_wf(name="petquant", segment_t1=True):
 
@@ -24,6 +24,7 @@ def create_pet_quantification_wf(name="petquant", segment_t1=True):
         inputnode = pe.Node(
             interface=util.IdentityInterface(fields=["subject_id",
                                                      "t1",
+                                                     "gm_mask",
                                                      "gm_prob",
                                                      "wm_prob",
                                                      "csf_prob",
@@ -33,7 +34,7 @@ def create_pet_quantification_wf(name="petquant", segment_t1=True):
 
     outputnode = pe.Node(
         interface=util.IdentityInterface(fields=["out_files",
-                                                 "pet_to_t1",
+                                                 "orig_pet_to_t1",
                                                  "corrected_pet_to_t1",
                                                  "pet_results_npz",
                                                  "pet_results_mat"]),
@@ -60,6 +61,7 @@ def create_pet_quantification_wf(name="petquant", segment_t1=True):
 
     applyxfm_gm = applyxfm_t1.clone("applyxfm_gm")
     applyxfm_gm.inputs.interp = 'nearestneighbour'
+    applyxfm_gmmask = applyxfm_gm.clone("applyxfm_gmmask")
     applyxfm_wm = applyxfm_gm.clone("applyxfm_wm")
     applyxfm_csf = applyxfm_gm.clone("applyxfm_csf")
 
@@ -87,6 +89,8 @@ def create_pet_quantification_wf(name="petquant", segment_t1=True):
         [(inputnode, coregister, [('pet', 'in_file')])])
     workflow.connect(
         [(coregister, convertxfm, [('out_matrix_file', 'in_file')])])
+    workflow.connect(
+        [(inputnode, coregister, [(('subject_id', add_subj_name_to_PET_T1), 'out_file')])])    
 
     if segment_t1:
         workflow.connect(
@@ -98,6 +102,8 @@ def create_pet_quantification_wf(name="petquant", segment_t1=True):
         [(convertxfm, applyxfm_t1, [('out_file', 'in_matrix_file')])])
     workflow.connect(
         [(convertxfm, applyxfm_gm, [('out_file', 'in_matrix_file')])])
+    workflow.connect(
+        [(convertxfm, applyxfm_gmmask, [('out_file', 'in_matrix_file')])])
     workflow.connect(
         [(convertxfm, applyxfm_wm, [('out_file', 'in_matrix_file')])])
     workflow.connect(
@@ -113,6 +119,8 @@ def create_pet_quantification_wf(name="petquant", segment_t1=True):
     workflow.connect(
         [(inputnode, applyxfm_gm, [('pet', 'reference')])])
     workflow.connect(
+        [(inputnode, applyxfm_gmmask, [('pet', 'reference')])])
+    workflow.connect(
         [(inputnode, applyxfm_wm, [('pet', 'reference')])])
     workflow.connect(
         [(inputnode, applyxfm_csf, [('pet', 'reference')])])
@@ -122,12 +130,16 @@ def create_pet_quantification_wf(name="petquant", segment_t1=True):
         workflow.connect(
             [(fast_seg_T1, applyxfm_gm, [(('probability_maps', select_GM), 'in_file')])])
         workflow.connect(
+            [(fast_seg_T1, applyxfm_gmmask, [(('tissue_class_files', select_GM), 'in_file')])])
+        workflow.connect(
             [(fast_seg_T1, applyxfm_wm, [(('probability_maps', select_WM), 'in_file')])])
         workflow.connect(
             [(fast_seg_T1, applyxfm_csf, [(('probability_maps', select_CSF), 'in_file')])])
     else:
         workflow.connect(
             [(inputnode, applyxfm_gm, [('gm_prob', 'in_file')])])
+        workflow.connect(
+            [(inputnode, applyxfm_gmmask, [('gm_mask', 'in_file')])])
         workflow.connect(
             [(inputnode, applyxfm_wm, [('wm_prob', 'in_file')])])
         workflow.connect(
@@ -144,6 +156,8 @@ def create_pet_quantification_wf(name="petquant", segment_t1=True):
         [(applyxfm_t1, pve_correction, [('out_file', 't1_file')])])
     workflow.connect(
         [(applyxfm_gm, pve_correction, [('out_file', 'grey_matter_file')])])
+    workflow.connect(
+        [(applyxfm_gmmask, pve_correction, [('out_file', 'grey_matter_binary_mask')])])
     workflow.connect(
         [(applyxfm_wm, pve_correction, [('out_file', 'white_matter_file')])])
     workflow.connect(
@@ -166,7 +180,7 @@ def create_pet_quantification_wf(name="petquant", segment_t1=True):
          (pve_correction,        outputnode, [("results_numpy_npz", "pet_results_npz")]),
          (pve_correction,        outputnode, [("results_matlab_mat", "pet_results_mat")]),
          (applyxfm_CorrectedPET, outputnode, [("out_file", "corrected_pet_to_t1")]),
-         (coregister,            outputnode, [("out_file", "pet_to_t1")]),
+         (coregister,            outputnode, [("out_file", "orig_pet_to_t1")]),
          ])
 
     return workflow

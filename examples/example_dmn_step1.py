@@ -87,6 +87,7 @@ workflow.connect([(dmnwf, datasink, [("outputnode.t1", "subject_id.@t1"),
                                        ("outputnode.term_mask", "subject_id.@term_mask"),
                                        ("outputnode.aparc_aseg", "subject_id.@aparc_aseg"),
                                        ("outputnode.tissue_class_files", "subject_id.@tissue_class_files"),
+                                       ("outputnode.t1_to_dwi", "subject_id.@t1_to_dwi"),
                                        ])])
 
 workflow.connect([(dmnwf, datasink, [("outputnode.rois", "subject_id.@rois"),
@@ -97,10 +98,11 @@ workflow.connect([(dmnwf, datasink, [("outputnode.rois", "subject_id.@rois"),
                                        ("outputnode.single_fiber_mask_cortex_only", "subject_id.@single_fiber_mask_cortex_only"),
                                        ])])
 
-workflow.connect([(dmnwf, datasink, [("outputnode.SUV_corrected_pet_to_t1", "subject_id.@SUV_corrected_pet_to_t1"),
-                                       ("outputnode.AIF_corrected_pet_to_t1", "subject_id.@AIF_corrected_pet_to_t1"),
-                                       ("outputnode.pet_results_npz", "subject_id.@pet_results_npz"),
-                                       ("outputnode.pet_results_mat", "subject_id.@pet_results_mat"),
+workflow.connect([(dmnwf, datasink, [("outputnode.SUV_corrected_pet_to_t1", "Step1Results.@SUV_corrected_pet_to_t1"),
+                                       ("outputnode.AIF_corrected_pet_to_t1", "Step1Results.@AIF_corrected_pet_to_t1"),
+                                       ("outputnode.pet_results_npz", "Step1Results.@pet_results_npz"),
+                                       ("outputnode.pet_results_mat", "Step1Results.@pet_results_mat"),
+                                       ("outputnode.orig_pet_to_t1", "Step1Results.@orig_pet_to_t1"),
                                        ])])
 
 
