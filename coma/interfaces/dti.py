@@ -237,7 +237,7 @@ def write_trackvis_scene(track_file, n_clusters=1, skip=80, names=None, out_file
             f.write('        <Track name="Track %d" id="%d">\n' % (n,n+1000))
 
         f.write('            <Length low="0" high="1e+08" />\n')
-        f.write('            <Property id="0" low="%d" high="%d" />\n' % (n,n+1)) # Determines which bundle is shown
+        f.write('            <Property id="0" low="%d" high="%d" />\n' % (n,n)) # Determines which bundle is shown
         f.write('            <Slice plane="0" number="91" thickness="1" testmode="0" enable="0" visible="1" operator="and" id="1925142528"/>\n')
         f.write('            <Slice plane="1" number="109" thickness="1" testmode="0" enable="0" visible="1" operator="and" id="1881842394"/>\n')
         f.write('            <Slice plane="2" number="91" thickness="1" testmode="0" enable="0" visible="1" operator="and" id="2133446589"/>\n')
@@ -283,12 +283,10 @@ def write_trackvis_scene(track_file, n_clusters=1, skip=80, names=None, out_file
     f.write('<ObjectAnnotation value="0" />\n')
     f.write('<BackgroundColor r="%d" g="%d" b="%d" />\n' % (bg_r, bg_g, bg_b))
     f.write('</Scene>\n')
-
-    #f.write('</TrackVis>\n')
     return out_file
 
 def bundle_tracks(in_file, dist_thr=40., pts = 16, skip=80.):
-    import os
+    import subprocess
     import os.path as op
     from nibabel import trackvis as tv
     from dipy.segment.quickbundles import QuickBundles
@@ -315,15 +313,11 @@ def bundle_tracks(in_file, dist_thr=40., pts = 16, skip=80.):
         for_save = [(sl, None, None) for sl in new_streams]
         tv.write(cluster_trk, for_save, hdr)
     
-    clust_str = str(out_files)
-    clust_str = clust_str.replace("'","")
-    clust_str = clust_str.replace("[","")
-    clust_str = clust_str.replace("]","")
-    clust_str = clust_str.replace(",","")
     out_merged_file = "MergedBundles.trk"
-    print(clust_str)
-
-    os.system("track_merge %s %s" % (clust_str, out_merged_file))
+    command_list = ["track_merge"]
+    command_list.extend(out_files)
+    command_list.append(out_merged_file)
+    subprocess.call(command_list)
     out_scene_file = write_trackvis_scene(out_merged_file, n_clusters=len(clusters), skip=skip, names=None, out_file = "NewScene.scene")
     print("Merged track file written to %s" % out_merged_file)
     print("Scene file written to %s" % out_scene_file)
