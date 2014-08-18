@@ -2,7 +2,7 @@ import nipype.interfaces.io as nio           # Data i/o
 import nipype.interfaces.utility as util     # utility
 import os.path as op
 import nipype.pipeline.engine as pe          # pypeline engine
-from coma.workflows.dti import create_connectivity_pipeline
+from coma.workflows.connectivity import create_connectivity_pipeline
 
 from coma.datasets import sample
 data_path = sample.data_path()
