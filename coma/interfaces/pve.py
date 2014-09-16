@@ -37,8 +37,9 @@ def parse_pve_results(results_text_file):
                 region_names = line.split(',')[1:]
             elif line != "\r\n" and line != "\n":
                 parse = [x.strip() for x in line.split(',')]
-                out_data[parse[0].replace(' ', '_')] = [float(x)
-                                                        for x in parse[1:]]
+                rowname = parse[0].replace(' ', '_')
+                rowname = rowname.replace('-', '_')
+                out_data[rowname] = [float(x) for x in parse[1:]]
 
     out_data["wm_slice_used"] = wm_slice_used
     out_data["region_names"] = region_names
