@@ -123,7 +123,7 @@ class RegionalValues(BaseInterface):
                     try:
                         stats['roi_names'].append(LUT_dict[x])
                     except KeyError:
-                        stats['roi_names'].append("Unknown_ROI_" + x)
+                        stats['roi_names'].append("Unknown_ROI_" + str(x))
 
             global all_ntwks
             all_ntwks = list()
@@ -176,7 +176,7 @@ class RegionalValues(BaseInterface):
                     try:
                         stats['roi_names'].append(LUT_dict[x])
                     except KeyError:
-                        stats['roi_names'].append("Unknown_ROI_" + x)
+                        stats['roi_names'].append("Unknown_ROI_" + str(x))
 
         if isdefined(self.inputs.subject_id):
             stats['subject_id'] = self.inputs.subject_id
