@@ -17,20 +17,28 @@ def inclusion_filtering_mrtrix3(track_file, roi_file, fa_file, md_file, roi_name
 
     fa_out_matrix = op.abspath("%s_FA.csv" % prefix)
     md_out_matrix = op.abspath("%s_MD.csv" % prefix)
+    invLen_invVol_out_matrix = op.abspath("%s_invLen_invVol.csv" % prefix)
 
     subprocess.call(["tck2connectome", "-assignment_voxel_lookup",
+        "-zero_diagonal",
         "-metric", "mean_scalar", "-image", fa_file,
         track_file, roi_file, fa_out_matrix])
 
     subprocess.call(["tck2connectome", "-assignment_voxel_lookup",
+        "-zero_diagonal",
         "-metric", "mean_scalar", "-image", md_file,
         track_file, roi_file, md_out_matrix])
+
+    subprocess.call(["tck2connectome", "-assignment_voxel_lookup",
+        "-zero_diagonal",
+        "-metric", "invlength_invnodevolume",
+        track_file, roi_file, invLen_invVol_out_matrix])
 
     subprocess.call(["tcknodeextract", "-assignment_voxel_lookup",
         track_file, roi_file, prefix + "_"])
 
-    fa_matrix = np.zeros((len(rois), len(rois)))
-    md_matrix = np.zeros((len(rois), len(rois)))
+    fa_matrix_thr = np.zeros((len(rois), len(rois)))
+    md_matrix_thr = np.zeros((len(rois), len(rois)))
     tdi_matrix = np.zeros((len(rois), len(rois)))
     track_volume_matrix = np.zeros((len(rois), len(rois)))
 
@@ -84,7 +92,7 @@ def inclusion_filtering_mrtrix3(track_file, roi_file, fa_file, md_file, roi_name
                 tck2trk = mrtrix.MRTrix2TrackVis()
                 tck2trk.inputs.image_file = fa_file
                 tck2trk.inputs.in_file = filtered_tracks
-                trk_file = op.abspath(idpair + ".trk")
+                trk_file = op.abspath("%s_%s.trk" % (prefix, idpair))
                 tck2trk.inputs.out_filename = trk_file
                 tck2trk.base_dir = op.abspath(".")
 
@@ -145,19 +153,19 @@ def inclusion_filtering_mrtrix3(track_file, roi_file, fa_file, md_file, roi_name
                     os.remove(fa_masked)
                     os.remove(md_masked)
                     os.remove(tdi)
-                    os.remove(tracks)
                 else:
                     out_files.append(md_masked)
                     out_files.append(fa_masked)
                     out_files.append(tracks)
                     out_files.append(tdi)
+                
+                if op.exists(trk_file):
                     out_files.append(trk_file)
-
-                track_files.append(trk_file)
+                    track_files.append(trk_file)
 
                 assert(0 <= mean_fa < 1)
-                fa_matrix[idx_i, idx_j] = mean_fa
-                md_matrix[idx_i, idx_j] = mean_md
+                fa_matrix_thr[idx_i, idx_j] = mean_fa
+                md_matrix_thr[idx_i, idx_j] = mean_md
                 tdi_matrix[idx_i, idx_j] = mean_tdi
                 track_volume_matrix[idx_i, idx_j] = track_volume
 
@@ -166,27 +174,42 @@ def inclusion_filtering_mrtrix3(track_file, roi_file, fa_file, md_file, roi_name
     md_matrix = np.loadtxt(md_out_matrix)
     fa_matrix = fa_matrix + fa_matrix.T
     md_matrix = md_matrix + md_matrix.T
+    fa_matrix_thr = fa_matrix_thr + fa_matrix_thr.T
+    md_matrix_thr = md_matrix_thr + md_matrix_thr.T
     tdi_matrix = tdi_matrix + tdi_matrix.T
+
+    invLen_invVol_matrix = np.loadtxt(invLen_invVol_out_matrix)
+    invLen_invVol_matrix = invLen_invVol_matrix + invLen_invVol_matrix.T
+
     track_volume_matrix = track_volume_matrix + track_volume_matrix.T
     if prefix is not None:
         npz_data = op.abspath("%s_connectivity.npz" % prefix)
     else:
         _, prefix, _ = split_filename(track_file)
         npz_data = op.abspath("%s_connectivity.npz" % prefix)
-    np.savez(npz_data, fa=fa_matrix, md=md_matrix, tdi=tdi_matrix, trkvol=track_volume_matrix)
+    np.savez(npz_data, fa=fa_matrix, md=md_matrix, tdi=tdi_matrix, trkvol=track_volume_matrix,
+        fa_thr=fa_matrix_thr, md_thr=md_matrix_thr, invLen_invVol=invLen_invVol_matrix)
 
 
     print("Saving heatmaps...")
     fa_heatmap = save_heatmap(fa_matrix, roi_names, '%s_fa' % prefix)
+    fa_heatmap_thr = save_heatmap(fa_matrix_thr, roi_names, '%s_fa_thr' % prefix)
     md_heatmap = save_heatmap(md_matrix, roi_names, '%s_md' % prefix)
+    md_heatmap_thr = save_heatmap(md_matrix_thr, roi_names, '%s_md_thr' % prefix)
     tdi_heatmap = save_heatmap(tdi_matrix, roi_names, '%s_tdi' % prefix)
     trk_vol_heatmap = save_heatmap(track_volume_matrix, roi_names, '%s_trk_vol' % prefix)
+
+    invLen_invVol_heatmap = save_heatmap(invLen_invVol_matrix, roi_names, '%s_invLen_invVol' % prefix)
+    
     
     summary_images = []
     summary_images.append(fa_heatmap)
+    summary_images.append(fa_heatmap_thr)    
     summary_images.append(md_heatmap)
+    summary_images.append(md_heatmap_thr)    
     summary_images.append(tdi_heatmap)
     summary_images.append(trk_vol_heatmap)
+    summary_images.append(invLen_invVol_heatmap)
 
 
     out_merged_file = op.abspath('%s_MergedTracks.trk' % prefix)
