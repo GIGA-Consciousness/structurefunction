@@ -76,13 +76,18 @@ def coreg_without_resample(name="highres_coreg"):
     workflow.connect([(final_rigid_reg_to_fixed, outputnode,[('out_file','out_file')])])
     return workflow
 
-def create_reg_and_label_wf(name="reg_wf"):
+def create_reg_and_label_wf(name="reg_wf", manual_seg_rois=False):
+    inputfields = ["subject_id",
+                 "aparc_aseg",
+                 "fa",
+                 "wm_mask",
+                 "termination_mask"]
+
+    if manual_seg_rois:
+        inputfields.append("manual_seg_rois")
+
     inputnode = pe.Node(
-        interface=util.IdentityInterface(fields=["subject_id",
-                                                 "aparc_aseg",
-                                                 "fa",
-                                                 "wm_mask",
-                                                 "termination_mask"]),
+        interface=util.IdentityInterface(fields=inputfields),
         name="inputnode")
 
     outputnode = pe.Node(
@@ -111,6 +116,10 @@ def create_reg_and_label_wf(name="reg_wf"):
         name = 'threshold_fa')
     threshold_fa.inputs.op_string = "-thr 0.2 -bin"
 
+    multiply_rois_by_termmask = pe.Node(interface=fsl.MultiImageMaths(),
+        name = 'multiply_rois_by_termmask')
+    multiply_rois_by_termmask.inputs.op_string = "-mul %s"
+
     termmask_to_dwi = rois_to_dwi.clone("termmask_to_dwi")
 
     invertxfm = pe.Node(interface=fsl.ConvertXFM(),
@@ -133,6 +142,10 @@ def create_reg_and_label_wf(name="reg_wf"):
         name = 'rename_rois_dwi')
     rename_rois_dwi.inputs.keep_ext = True
 
+    rename_rois = pe.Node(interface=util.Rename(format_string = "%(subject_id)s_rois"),
+        name = 'rename_rois')
+    rename_rois.inputs.keep_ext = True
+
     rename_termmask_dwi = pe.Node(interface=util.Rename(format_string = "%(subject_id)s_term_mask_dwi"),
         name = 'rename_termmask_dwi')
     rename_termmask_dwi.inputs.keep_ext = True
@@ -146,16 +159,32 @@ def create_reg_and_label_wf(name="reg_wf"):
     rename_highres_matrix_file.inputs.keep_ext = True
 
     workflow = pe.Workflow(name=name)
-    workflow.connect(
-        [(inputnode, dmn_labelling, [(('subject_id', add_subj_name_to_rois), 'out_filename')])])
-    workflow.connect([(inputnode, dmn_labelling, [("aparc_aseg", "in_file")])])
 
     workflow.connect([(inputnode, align_wmmask_to_dwi,[("wm_mask","inputnode.moving_image")])])
     workflow.connect([(inputnode, threshold_fa,[("fa","in_file")])])
     workflow.connect([(threshold_fa, align_wmmask_to_dwi,[("out_file","inputnode.fixed_image")])])
     
-    workflow.connect([(dmn_labelling, rois_to_dwi,[("out_file","in_file")])])
-    workflow.connect([(dmn_labelling, rois_to_dwi,[("out_file","reference")])])
+
+    if manual_seg_rois:
+        workflow.connect([(inputnode, rois_to_dwi,[("manual_seg_rois","in_file")])])
+        workflow.connect([(inputnode, rois_to_dwi,[("manual_seg_rois","reference")])])
+        workflow.connect([(inputnode, outputnode, [("manual_seg_rois", "rois")])])
+
+    else:
+        workflow.connect(
+            [(inputnode, dmn_labelling, [(('subject_id', add_subj_name_to_rois), 'out_filename')])])
+        workflow.connect([(inputnode, dmn_labelling, [("aparc_aseg", "in_file")])])
+
+        workflow.connect([(dmn_labelling, multiply_rois_by_termmask,[("out_file","in_file")])])
+        workflow.connect([(inputnode, multiply_rois_by_termmask,[("termination_mask","operand_files")])])
+        workflow.connect([(multiply_rois_by_termmask, rename_rois,[("out_file","in_file")])])
+        workflow.connect([(inputnode, rename_rois,[("subject_id","subject_id")])])
+        workflow.connect([(rename_rois, rois_to_dwi,[("out_file","in_file")])])
+        workflow.connect([(rename_rois, rois_to_dwi,[("out_file","reference")])])
+        workflow.connect(
+            [(rename_rois, outputnode, [("out_file", "rois")])])
+
+
     workflow.connect([(align_wmmask_to_dwi, rois_to_dwi,[("outputnode.highres_matrix_file","in_matrix_file")])])
 
     workflow.connect([(inputnode, termmask_to_dwi,[("termination_mask","in_file")])])
@@ -165,10 +194,6 @@ def create_reg_and_label_wf(name="reg_wf"):
     workflow.connect(
         [(align_wmmask_to_dwi, invertxfm, [("outputnode.lowres_matrix_file", "in_file")])])
 
-
-
-    workflow.connect(
-        [(dmn_labelling, outputnode, [("out_file", "rois")])])
 
     workflow.connect(
         [(inputnode, rename_t1_to_dwi_mat, [("subject_id", "subject_id")])])
@@ -215,19 +240,24 @@ def create_reg_and_label_wf(name="reg_wf"):
     return workflow
 
 
-def create_dmn_pipeline_step1(name="dmn_step1", scale_by_glycemia=True):
+def create_dmn_pipeline_step1(name="dmn_step1", scale_by_glycemia=True, manual_seg_rois=False):
+    inputfields = ["subjects_dir",
+                     "subject_id",
+                     "dwi",
+                     "bvecs",
+                     "bvals",
+                     "fdgpet",
+                     "dose",
+                     "weight",
+                     "delay",
+                     "glycemie",
+                     "scan_time"]
+
+    if manual_seg_rois:
+        inputfields.append("manual_seg_rois")
+
     inputnode = pe.Node(
-        interface=util.IdentityInterface(fields=["subjects_dir",
-                                                 "subject_id",
-                                                 "dwi",
-                                                 "bvecs",
-                                                 "bvals",
-                                                 "fdgpet",
-                                                 "dose",
-                                                 "weight",
-                                                 "delay",
-                                                 "glycemie",
-                                                 "scan_time"]),
+        interface=util.IdentityInterface(fields=inputfields),
         name="inputnode")
 
     outputnode = pe.Node(
@@ -253,6 +283,7 @@ def create_dmn_pipeline_step1(name="dmn_step1", scale_by_glycemia=True):
                                                  "wmmask_to_dwi",
                                                  "termmask_to_dwi",
                                                  "dwi_to_t1_matrix",
+                                                 "highres_t1_to_dwi_matrix",
 
                                                  # Outputs from the PET workflow after SUV calculation
                                                  "SUV_corrected_pet_to_t1",
@@ -292,7 +323,7 @@ def create_dmn_pipeline_step1(name="dmn_step1", scale_by_glycemia=True):
     single_fiber_mask_cortex_only.inputs.op_string = "-mul %s"
 
     dtiproc = damaged_brain_dti_processing("dtiproc")
-    reg_label = create_reg_and_label_wf("reg_label")
+    reg_label = create_reg_and_label_wf("reg_label", manual_seg_rois)
     petquant = create_pet_quantification_wf("petquant", segment_t1=False)
 
     workflow = pe.Workflow(name=name)
@@ -307,6 +338,9 @@ def create_dmn_pipeline_step1(name="dmn_step1", scale_by_glycemia=True):
          ])
 
     workflow.connect([(inputnode, reg_label, [("subject_id", "inputnode.subject_id")])])
+
+    if manual_seg_rois:
+        workflow.connect([(inputnode, reg_label, [("manual_seg_rois", "inputnode.manual_seg_rois")])])
     
     workflow.connect([(dtiproc, reg_label, [("outputnode.wm_mask", "inputnode.wm_mask"),
                                             ("outputnode.term_mask", "inputnode.termination_mask"),
@@ -367,7 +401,12 @@ def create_dmn_pipeline_step1(name="dmn_step1", scale_by_glycemia=True):
 
     workflow.connect([(inputnode, petquant, [("fdgpet", "inputnode.pet")])])
     workflow.connect([(inputnode, petquant, [("subject_id", "inputnode.subject_id")])])
-    workflow.connect([(reg_label, petquant, [("outputnode.rois", "inputnode.rois")])])
+
+    if manual_seg_rois:
+        workflow.connect([(inputnode, petquant, [("manual_seg_rois", "inputnode.rois")])])
+    else:
+        workflow.connect([(reg_label, petquant, [("outputnode.rois", "inputnode.rois")])])
+
     workflow.connect([(petquant, compute_AIF_PET, [("outputnode.corrected_pet_to_t1", "in_file")])])
     workflow.connect([(petquant, compute_SUV_norm_glycemia, [("outputnode.corrected_pet_to_t1", "in_file")])])
     workflow.connect([(petquant, scale_PVC_matrix, [("outputnode.pet_results_npz", "in_file")])])
@@ -394,12 +433,17 @@ def create_dmn_pipeline_step1(name="dmn_step1", scale_by_glycemia=True):
                                            ("outputnode.tissue_class_files", "tissue_class_files"),
                                            ])])
 
-    workflow.connect([(reg_label, outputnode, [("outputnode.rois", "rois"),
-                                           ("outputnode.rois_to_dwi", "rois_to_dwi"),
+    
+    workflow.connect([(reg_label, outputnode, [("outputnode.rois_to_dwi", "rois_to_dwi"),
                                            ("outputnode.wmmask_to_dwi", "wmmask_to_dwi"),
                                            ("outputnode.termmask_to_dwi", "termmask_to_dwi"),
                                            ("outputnode.dwi_to_t1_matrix", "dwi_to_t1_matrix"),
+                                           ("outputnode.highres_t1_to_dwi_matrix", "highres_t1_to_dwi_matrix"),
                                            ])])
+    if manual_seg_rois:
+        workflow.connect([(inputnode, outputnode, [("manual_seg_rois", "rois")])])
+    else:
+        workflow.connect([(reg_label, outputnode, [("outputnode.rois", "rois")])])
 
     workflow.connect([(compute_AIF_PET, outputnode, [("out_file", "SUV_corrected_pet_to_t1")])])
     workflow.connect([(compute_SUV_norm_glycemia, outputnode, [("out_file", "AIF_corrected_pet_to_t1")])])
