@@ -118,7 +118,12 @@ class RegionalValues(BaseInterface):
             stats['number_of_voxels'] = voxels
             stats['rois'] = rois
             if isdefined(self.inputs.lookup_table):
-                stats['roi_names'] = [LUT_dict[x] for x in rois]
+                stats['roi_names'] = []
+                for x in rois:
+                    try:
+                        stats['roi_names'].append(LUT_dict[x])
+                    except KeyError:
+                        stats['roi_names'].append("Unknown_ROI_" + str(x))
 
             global all_ntwks
             all_ntwks = list()
@@ -166,7 +171,12 @@ class RegionalValues(BaseInterface):
             stats['number_of_voxels'] = voxels
             stats['rois'] = rois
             if isdefined(self.inputs.lookup_table):
-                stats['roi_names'] = [LUT_dict[x] for x in rois]
+                stats['roi_names'] = []
+                for x in rois:
+                    try:
+                        stats['roi_names'].append(LUT_dict[x])
+                    except KeyError:
+                        stats['roi_names'].append("Unknown_ROI_" + str(x))
 
         if isdefined(self.inputs.subject_id):
             stats['subject_id'] = self.inputs.subject_id

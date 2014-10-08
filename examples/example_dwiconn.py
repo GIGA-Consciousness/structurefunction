@@ -2,13 +2,13 @@ import nipype.interfaces.io as nio           # Data i/o
 import nipype.interfaces.utility as util     # utility
 import os.path as op
 import nipype.pipeline.engine as pe          # pypeline engine
-from coma.workflows.dti import create_connectivity_pipeline
+from coma.workflows.connectivity import create_connectivity_pipeline
 
 from coma.datasets import sample
 data_path = sample.data_path()
 
 import cmp
-parcellation_name = 'scale500'
+parcellation_name = 'scale33'
 cmp_config = cmp.configuration.PipelineConfiguration()
 cmp_config.parcellation_scheme = "Lausanne2008"
 
@@ -36,7 +36,7 @@ datasource.inputs.field_template = dict(dwi='data/%s/%s.nii.gz', bvecs='data/%s/
 datasource.inputs.template_args = info
 datasource.inputs.sort_filelist = True
 
-structural = create_connectivity_pipeline("structural")
+structural = create_connectivity_pipeline("structural", parcellation_name)
 structural.inputs.mapping.inputnode_within.resolution_network_file = cmp_config._get_lausanne_parcellation('Lausanne2008')[parcellation_name]['node_information_graphml']
 
 # It's recommended to use low max harmonic order in damaged brains
@@ -50,7 +50,7 @@ structural.inputs.mapping.fsl2mrtrix.invert_x = True
 datasink = pe.Node(interface=nio.DataSink(), name="datasink")
 datasink.inputs.base_directory = output_dir
 
-workflow = pe.Workflow(name='denoised')
+workflow = pe.Workflow(name='connnectivity')
 workflow.base_dir = output_dir
 
 workflow.connect([(infosource, datasource, [('subject_id', 'subject_id')])])
@@ -67,5 +67,5 @@ workflow.connect(
 workflow.connect(
     [(structural, datasink, [('outputnode.connectome', '@subject_id.connectome')])])
 
-workflow.run()
-#workflow.run(plugin='MultiProc', plugin_args={'n_procs' : 3})
+#workflow.run()
+workflow.run(plugin='MultiProc', plugin_args={'n_procs' : 6})

@@ -7,14 +7,17 @@ from coma.interfaces.mrtrix3 import inclusion_filtering_mrtrix3
 
 fsl.FSLCommand.set_default_output_type('NIFTI_GZ')
 
-def save_heatmap(in_array, labels, out_name):
+def save_heatmap(in_array, labels, out_name, colormap=None):
     import matplotlib.pyplot as plt
     import numpy as np
     from nipype.utils.filemanip import split_filename
     import seaborn as sns
 
     fig, ax = plt.subplots()
-    heatmap = ax.pcolor(in_array, cmap=plt.cm.Blues)
+    if colormap is None:
+        heatmap = ax.pcolor(in_array, cmap=plt.cm.Blues)
+    else:
+        heatmap = ax.pcolor(in_array, cmap=colormap)
 
     # want a more natural, table-like display
     ax.invert_yaxis()
@@ -30,8 +33,8 @@ def save_heatmap(in_array, labels, out_name):
 
     #plt.xticks(rotation=45)
 
-    _, name, _ = split_filename(out_name)
-    out_file = op.abspath(name + ".pdf")
+    path, name, _ = split_filename(out_name)
+    out_file = op.join(path, name + ".pdf")
     plt.savefig(out_file)
     return out_file
 

@@ -37,8 +37,9 @@ def parse_pve_results(results_text_file):
                 region_names = line.split(',')[1:]
             elif line != "\r\n" and line != "\n":
                 parse = [x.strip() for x in line.split(',')]
-                out_data[parse[0].replace(' ', '_')] = [float(x)
-                                                        for x in parse[1:]]
+                rowname = parse[0].replace(' ', '_')
+                rowname = rowname.replace('-', '_')
+                out_data[rowname] = [float(x) for x in parse[1:]]
 
     out_data["wm_slice_used"] = wm_slice_used
     out_data["region_names"] = region_names
@@ -258,6 +259,9 @@ class PartialVolumeCorrectionInputSpec(BaseInterfaceInputSpec):
                              desc='Uses the WM/GM/CSF segmentation instead of an atlas')
     use_fs_LUT = traits.Bool(True, usedefault=True,
                              desc='Uses the Freesurfer lookup table for names in the atlas')
+    x_dir_point_spread_function_FWHM = traits.Float(8, usedefault=True)
+    y_dir_point_spread_function_FWHM = traits.Float(8, usedefault=True)
+    z_dir_point_spread_function_FWHM = traits.Float(0, usedefault=True)
 
 
 class PartialVolumeCorrectionOutputSpec(TraitedSpec):
@@ -368,7 +372,10 @@ class PartialVolumeCorrection(BaseInterface):
             wm_path=wm_path,
             csf_path=csf_path,
             rois_path=rois_path,
-            dat_path=dat_path)
+            dat_path=dat_path,
+            X_PSF=self.inputs.x_dir_point_spread_function_FWHM,
+            Y_PSF=self.inputs.y_dir_point_spread_function_FWHM,
+            Z_PSF=self.inputs.z_dir_point_spread_function_FWHM)
         script = Template("""       
         filelist = '$list_path';
         gm = '$gm_path';
@@ -376,7 +383,10 @@ class PartialVolumeCorrection(BaseInterface):
         csf = '$csf_path';
         rois = '$rois_path';
         dat = '$dat_path';
-        runbatch_nogui(filelist, gm, wm, csf, rois, dat)
+        x_fwhm = '$X_PSF';
+        y_fwhm = '$Y_PSF';
+        z_fwhm = '$Z_PSF';
+        runbatch_nogui(filelist, gm, wm, csf, rois, dat, x_fwhm, y_fwhm, z_fwhm)
         """).substitute(d)
         mlab = MatlabCommand(script=script, mfile=True,
                              prescript=[''], postscript=[''])
@@ -388,6 +398,8 @@ class PartialVolumeCorrection(BaseInterface):
         occu_meltzer_img = glob.glob(
             "pve_%s/r_volume_Occu_Meltzer.img" % foldername)[0]
         analyze_to_nifti(occu_meltzer_img, affine=orig_affine)
+        import ipdb
+        ipdb.set_trace()
         meltzer_img = glob.glob("pve_%s/r_volume_Meltzer.img" % foldername)[0]
         analyze_to_nifti(meltzer_img, affine=orig_affine)
         MG_rousset_img = glob.glob(
