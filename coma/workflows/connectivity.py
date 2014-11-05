@@ -171,7 +171,6 @@ def create_connectivity_pipeline(name="connectivity", parcellation_name='scale50
     tracks2prob.inputs.colour = True
     MRconvert_tracks2prob = MRconvert_fa.clone(name='MRconvert_tracks2prob')
     tck2trk = pe.Node(interface=mrtrix.MRTrix2TrackVis(),name='tck2trk')
-    trk2tdi = pe.Node(interface=dipy.TrackDensityMap(),name='trk2tdi')
 
     """
     Structural segmentation nodes
@@ -390,7 +389,6 @@ def create_connectivity_pipeline(name="connectivity", parcellation_name='scale50
     mapping.connect([(coregister, tck2trk,[("out_matrix_file","matrix_file")])])
     mapping.connect([(probCSDstreamtrack, tck2trk,[("tracked","in_file")])])
     mapping.connect([(tck2trk, creatematrix,[("out_file","tract_file")])])
-    mapping.connect([(tck2trk, trk2tdi,[("out_file","in_file")])])
     mapping.connect(inputnode_within, 'resolution_network_file',
                     creatematrix, 'resolution_network_file')
     mapping.connect([(inputnode_within, creatematrix,[("subject_id","out_matrix_file")])])
@@ -514,7 +512,6 @@ def create_connectivity_pipeline(name="connectivity", parcellation_name='scale50
         ("CreateMatrix.filtered_tractographies", "filtered_tracts"),
         ("merge_nfib_csvs.csv_file", "fiber_csv"),
         ("mri_convert_ROI_scale500.out_file", "rois"),
-        ("trk2tdi.out_file", "tdi"),
         ("csdeconv.spherical_harmonics_image", "odfs"),
         ("mri_convert_Brain.out_file", "struct"),
         ("MRconvert_fa.converted", "fa"),
