@@ -16,7 +16,7 @@ from coma.helpers import (add_subj_name_to_sfmask, add_subj_name_to_wmmask,
                           wm_labels_only)
 
 
-def damaged_brain_dti_processing(name="dwi_preproc"):
+def damaged_brain_dti_processing(name="dwi_preproc", use_FAST_masks=True):
     '''
     Uses both Freesurfer and FAST to mask the white matter
     because neither works sufficiently well in patients
@@ -77,20 +77,28 @@ def damaged_brain_dti_processing(name="dwi_preproc"):
     threshold_mode = pe.Node(interface=fsl.ImageMaths(), name='threshold_mode')
     threshold_mode.inputs.op_string = "-thr 0.9 -fmedian -fmedian"
 
-    make_termination_mask = pe.Node(
-        interface=fsl.ImageMaths(), name='make_termination_mask')
-    make_termination_mask.inputs.op_string = "-bin"
 
     fast_seg_T1 = pe.Node(interface=fsl.FAST(), name='fast_seg_T1')
     fast_seg_T1.inputs.segments = True
     fast_seg_T1.inputs.probability_maps = True
 
-    fix_wm_mask = pe.Node(interface=fsl.MultiImageMaths(), name='fix_wm_mask')
-    fix_wm_mask.inputs.op_string = "-mul %s"
+    if not use_FAST_masks:
+        fix_wm_mask = pe.Node(interface=fsl.MultiImageMaths(), name='fix_wm_mask')
+        fix_wm_mask.inputs.op_string = "-mul %s"
 
-    fix_termination_mask = pe.Node(
-        interface=fsl.MultiImageMaths(), name='fix_termination_mask')
-    fix_termination_mask.inputs.op_string = "-binv -mul %s"
+    if use_FAST_masks:
+        make_termination_mask = pe.Node(
+            interface=fsl.MultiImageMaths(), name='make_termination_mask')
+        make_termination_mask.inputs.op_string = "-add %s -bin"
+    else:
+        make_termination_mask = pe.Node(
+            interface=fsl.ImageMaths(), name='make_termination_mask')
+        make_termination_mask.inputs.op_string = "-bin"
+
+        fix_termination_mask = pe.Node(
+            interface=fsl.MultiImageMaths(), name='fix_termination_mask')
+        fix_termination_mask.inputs.op_string = "-binv -mul %s"
+
 
     wm_mask_interface = util.Function(input_names=["in_file", "out_filename"],
                                       output_names=["out_file"],
@@ -153,20 +161,34 @@ def damaged_brain_dti_processing(name="dwi_preproc"):
         [(FreeSurferSource, mri_convert_ROIs, [(('aparc_aseg', select_aparc), 'in_file')])])
     workflow.connect(
         [(inputnode, mri_convert_ROIs, [(('subject_id', add_subj_name_to_aparc), 'out_file')])])
-    workflow.connect(
-        [(mri_convert_ROIs, make_wm_mask, [('out_file', 'in_file')])])
-    workflow.connect(
-        [(make_wm_mask, fix_wm_mask, [('out_file', 'operand_files')])])
-    workflow.connect(
-        [(fast_seg_T1, fix_wm_mask, [(('tissue_class_files', select_WM), 'in_file')])])
-    workflow.connect(
-        [(FreeSurferSource, mri_convert_Ribbon, [(('ribbon', select_ribbon), 'in_file')])])
-    workflow.connect(
-        [(mri_convert_Ribbon, make_termination_mask, [('out_file', 'in_file')])])
-    workflow.connect(
-        [(make_termination_mask, fix_termination_mask, [('out_file', 'operand_files')])])
-    workflow.connect(
-        [(fast_seg_T1, fix_termination_mask, [(('tissue_class_files', select_CSF), 'in_file')])])
+
+    if use_FAST_masks:
+        workflow.connect(
+            [(fast_seg_T1, outputnode, [(('tissue_class_files', select_WM), 'wm_mask')])])
+        workflow.connect(
+            [(fast_seg_T1, make_termination_mask, [(('tissue_class_files', select_GM), 'in_file')])])
+        workflow.connect(
+            [(fast_seg_T1, make_termination_mask, [(('tissue_class_files', select_WM), 'operand_files')])])
+        workflow.connect(
+            [(inputnode, make_termination_mask, [(('subject_id', add_subj_name_to_termmask), 'out_file')])])
+        workflow.connect(
+            [(make_termination_mask, outputnode, [("out_file", "term_mask")])])
+
+    else:
+        workflow.connect(
+            [(mri_convert_ROIs, make_wm_mask, [('out_file', 'in_file')])])
+        workflow.connect(
+            [(make_wm_mask, fix_wm_mask, [('out_file', 'operand_files')])])
+        workflow.connect(
+            [(fast_seg_T1, fix_wm_mask, [(('tissue_class_files', select_WM), 'in_file')])])
+        workflow.connect(
+            [(FreeSurferSource, mri_convert_Ribbon, [(('ribbon', select_ribbon), 'in_file')])])
+        workflow.connect(
+            [(mri_convert_Ribbon, make_termination_mask, [('out_file', 'in_file')])])
+        workflow.connect(
+            [(make_termination_mask, fix_termination_mask, [('out_file', 'operand_files')])])
+        workflow.connect(
+            [(fast_seg_T1, fix_termination_mask, [(('tissue_class_files', select_CSF), 'in_file')])])
 
     '''
     Diffusion processing
@@ -204,12 +226,13 @@ def damaged_brain_dti_processing(name="dwi_preproc"):
     '''
     workflow.connect(
         [(inputnode, MultFAbyMode, [(('subject_id', add_subj_name_to_sfmask), 'out_filename')])])
-    workflow.connect(
-        [(inputnode, make_wm_mask, [(('subject_id', add_subj_name_to_wmmask), 'out_filename')])])
-    workflow.connect(
-        [(inputnode, fix_wm_mask, [(('subject_id', add_subj_name_to_wmmask), 'out_file')])])
-    workflow.connect(
-        [(inputnode, fix_termination_mask, [(('subject_id', add_subj_name_to_termmask), 'out_file')])])
+    if not use_FAST_masks:
+        workflow.connect(
+            [(inputnode, make_wm_mask, [(('subject_id', add_subj_name_to_wmmask), 'out_filename')])])
+        workflow.connect(
+            [(inputnode, fix_wm_mask, [(('subject_id', add_subj_name_to_wmmask), 'out_file')])])
+        workflow.connect(
+            [(inputnode, fix_termination_mask, [(('subject_id', add_subj_name_to_termmask), 'out_file')])])
 
 
     '''
@@ -233,9 +256,14 @@ def damaged_brain_dti_processing(name="dwi_preproc"):
         (nonlinfit_node, outputnode, [("MD", "md")]),
         (nonlinfit_node, outputnode, [("mode", "mode")]),
         (MultFAbyMode, outputnode, [("out_file", "single_fiber_mask")]),
-        (fix_wm_mask, outputnode, [("out_file", "wm_mask")]),
-        (fix_termination_mask, outputnode, [("out_file", "term_mask")]),
         (mri_convert_Brain, outputnode, [("out_file", "t1_brain")]),
         (mri_convert_T1, outputnode, [("out_file", "t1")]),
     ])
+
+    if not use_FAST_masks:
+        workflow.connect(
+            [(fix_wm_mask, outputnode, [("out_file", "wm_mask")])])
+        workflow.connect(
+            [(fix_termination_mask, outputnode, [("out_file", "term_mask")])])
+
     return workflow
