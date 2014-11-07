@@ -26,7 +26,12 @@ def nonlinfit_fn(dwi, bvecs, bvals, base_name):
 
     # Load the gradient strengths and directions
     bvals = np.loadtxt(bvals)
-    gradients = np.loadtxt(bvecs).T
+    gradients = np.loadtxt(bvecs)
+
+    # Dipy wants Nx3 arrays
+    if gradients.shape[0] == 3:
+        gradients = gradients.T
+        assert(gradients.shape[1] == 3)
 
     # Place in Dipy's preferred format
     gtab = GradientTable(gradients)

@@ -253,6 +253,14 @@ def add_subj_name_to_cortex_sfmask(subject_id):
     return subject_id + "_SingleFiberMask_CortexOnly.nii.gz"
 
 
+def add_subj_name_to_Connectome(subject_id):
+    return subject_id + "_Connectome.cff"
+
+
+def add_subj_name_to_nxConnectome(subject_id):
+    return subject_id + "_NetworkXConnectome.cff"
+
+
 def add_subj_name_to_sfmask(subject_id):
     return subject_id + "_SingleFiberMask.nii.gz"
 
