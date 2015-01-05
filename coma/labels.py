@@ -10,6 +10,7 @@ def dmn_labels_combined(in_file, out_filename):
     out_data = np.zeros(np.shape(in_data))
     out_data = out_data.astype(int)
 
+    ## This is the PET DTI option (uncomment this)
     # Thalami
     out_data[np.where(in_data==10)] = 1
     out_data[np.where(in_data==49)] = 2
@@ -39,7 +40,37 @@ def dmn_labels_combined(in_file, out_filename):
     # Inferior parietal
     out_data[np.where(in_data==1008)] = 7
     out_data[np.where(in_data==2008)] = 8
+
+     ## This is the Actigait option (uncomment this)
+    # Thalami
+    #out_data[np.where(in_data==10)] = 1
+    #out_data[np.where(in_data==49)] = 2
+
+    # Frontal
+    # Medial orbitofrontal
+    #out_data[np.where(in_data==1014)] = 3
+    #out_data[np.where(in_data==2014)] = 4
+    # Superior frontal
+    #out_data[np.where(in_data==1028)] = 3
+    #out_data[np.where(in_data==2028)] = 4
+    # Frontal pole
+    #out_data[np.where(in_data==1032)] = 3
+    #out_data[np.where(in_data==2032)] = 4
+
+    # Precentral
+    #out_data[np.where(in_data==1024)] = 5
+    #out_data[np.where(in_data==3024)] = 6
     
+    # Postcentral
+    #out_data[np.where(in_data==1022)] = 7
+    #out_data[np.where(in_data==3022)] = 8
+    
+    # Paracentral
+    #out_data[np.where(in_data==1017)] = 9
+    #out_data[np.where(in_data==2017)] = 10
+    
+
+
     _, name, _ = split_filename(in_file)
     out_file = op.abspath(out_filename)
     try:

@@ -398,8 +398,6 @@ class PartialVolumeCorrection(BaseInterface):
         occu_meltzer_img = glob.glob(
             "pve_%s/r_volume_Occu_Meltzer.img" % foldername)[0]
         analyze_to_nifti(occu_meltzer_img, affine=orig_affine)
-        import ipdb
-        ipdb.set_trace()
         meltzer_img = glob.glob("pve_%s/r_volume_Meltzer.img" % foldername)[0]
         analyze_to_nifti(meltzer_img, affine=orig_affine)
         MG_rousset_img = glob.glob(
